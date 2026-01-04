@@ -1,0 +1,6 @@
+{
+    "terminal.integrated.shellIntegration.environmentReporting": true,
+    "terminal.integrated.suggest.enabled": true,
+    "cmake.sourceDirectory": "C:/Users/TechCare/Desktop/flutter/mmm/equb/windows/flutter",
+    "java.configuration.updateBuildConfiguration": "interactive"
+}

@@ -1,0 +1,90 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# ---------------------------------------------------------------------------
+# Secrets / local-only config (do NOT commit)
+# ---------------------------------------------------------------------------
+# Firebase config files
+**/google-services.json
+**/GoogleService-Info.plist
+**/firebase_app_id_file.json
+
+# Firebase CLI / Hosting / Emulators config (project-level, but keep out of public repo if desired)
+firebase.json
+.firebaserc
+.firebase/
+
+# App-side Firebase options indirection (keep keys out of git)
+/lib/config/firebase_secrets.dart
+
+# Android signing
+**/*.jks
+**/*.keystore
+**/key.properties
+
+# Env files
+.env
+.env.*
+
+# Service account / private keys / certs
+**/*serviceAccount*.json
+**/*service-account*.json
+**/*.p12
+**/*.pem
+**/*.key
+**/*.crt
+
+# Local debug outputs / logs
+*_test_output*.txt
+*_test_output*.json
+test_output*.txt
+test_output*.json
+build_log.txt
+firebase-debug.log
+flutter_*.log
+
+# Local planning notes
+PROGRESS.md

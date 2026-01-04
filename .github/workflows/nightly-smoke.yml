@@ -1,0 +1,69 @@
+name: Nightly Smoke Tests
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-smoke
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Flutter Smoke Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: stable
+
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Prepare artifact directory
+        run: mkdir -p artifacts
+
+      - name: Flutter analyze
+        run: |
+          set -eo pipefail
+          flutter analyze | tee artifacts/flutter-analyze.log
+
+      - name: Flutter test (full suite)
+        run: |
+          set -eo pipefail
+          flutter test | tee artifacts/flutter-test.log
+
+      - name: Flutter test (targeted suites)
+        run: |
+          set -eo pipefail
+          flutter test \
+            test/ui/wallet_screen_test.dart \
+            test/ui/tx_history_screen_test.dart \
+            test/ui/group_detail_gateway_test.dart \
+            test/services/bank_settlement_worker_test.dart \
+            test/services/reminder_scheduler_service_test.dart \
+            test/services/analytics_persistence_test.dart \
+            test/providers/wallet_cohort_summary_test.dart \
+            | tee artifacts/flutter-test-targeted.log
+
+      - name: Upload smoke artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-smoke-logs
+          path: artifacts
+          if-no-files-found: error
