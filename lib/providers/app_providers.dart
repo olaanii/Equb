@@ -53,3 +53,13 @@ final onboardingStatusProvider = FutureProvider<bool>((ref) async {
   final prefs = await SharedPreferences.getInstance();
   return prefs.getBool('hasSeenOnboarding') ?? false;
 });
+
+final selectedTabIndexProvider =
+    NotifierProvider<SelectedTabIndexNotifier, int>(() {
+      return SelectedTabIndexNotifier();
+    });
+
+class SelectedTabIndexNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+}

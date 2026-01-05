@@ -35,7 +35,7 @@ class FirestoreEqubRepository implements EqubRepository {
   @override
   Future<EqubGroup> createGroup(EqubGroup g, {String? actingUserId}) {
     return _guard('createGroup', () async {
-      final docRef = _groupsRef.doc(g.id.isEmpty ? null : g.id);
+      final docRef = g.id.isEmpty ? _groupsRef.doc() : _groupsRef.doc(g.id);
       final groupWithId = g.copyWith(id: docRef.id);
       await docRef.set(groupWithId.toJson());
       return groupWithId;

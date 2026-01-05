@@ -1,8 +1,10 @@
 import 'package:equb/models/transaction_model.dart';
+import 'package:equb/providers/admin_providers.dart';
 import 'package:equb/providers/gateway_providers.dart';
 import 'package:equb/providers/transaction_providers.dart';
 import 'package:equb/services/gateway_service.dart';
 import 'package:equb/ui/responsive.dart';
+import 'package:equb/ui/screens/transactions/admin_deposit_review_screen.dart';
 import 'package:equb/ui/screens/transactions/tx_detail_screen.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:equb/ui/widgets/common.dart';
@@ -10,7 +12,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class TxHistoryScreen extends ConsumerStatefulWidget {
-  const TxHistoryScreen({super.key});
+  const TxHistoryScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   ConsumerState<TxHistoryScreen> createState() => _TxHistoryScreenState();
@@ -19,6 +23,7 @@ class TxHistoryScreen extends ConsumerStatefulWidget {
 class _TxHistoryScreenState extends ConsumerState<TxHistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
   TransactionStatus? _statusFilter;
+  int _adminViewIndex = 0;
 
   @override
   void dispose() {
@@ -29,6 +34,8 @@ class _TxHistoryScreenState extends ConsumerState<TxHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isAdmin = ref.watch(isAdminProvider).asData?.value == true;
+
     final transactionsAsync = ref.watch(transactionHistoryProvider);
     final gatewayConfigsAsync = ref.watch(gatewayConfigsProvider);
     final gatewayLookup = gatewayConfigsAsync.maybeWhen(
@@ -39,9 +46,9 @@ class _TxHistoryScreenState extends ConsumerState<TxHistoryScreen> {
       orElse: () => const <String, PaymentGatewayConfig>{},
     );
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Transactions')),
-      body: transactionsAsync.when(
+    final body = isAdmin && _adminViewIndex == 1
+        ? _PendingDepositsView(searchController: _searchController)
+        : transactionsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, stack) => Center(child: Text('Error: $err')),
         data: (transactions) {
@@ -68,6 +75,28 @@ class _TxHistoryScreenState extends ConsumerState<TxHistoryScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (isAdmin)
+                            SegmentedButton<int>(
+                              segments: const [
+                                ButtonSegment(
+                                  value: 0,
+                                  label: Text('My transactions'),
+                                  icon: Icon(Icons.receipt_long_outlined),
+                                ),
+                                ButtonSegment(
+                                  value: 1,
+                                  label: Text('Pending deposits'),
+                                  icon: Icon(Icons.fact_check_outlined),
+                                ),
+                              ],
+                              selected: {_adminViewIndex},
+                              onSelectionChanged: (selection) {
+                                final next = selection.first;
+                                if (next == _adminViewIndex) return;
+                                setState(() => _adminViewIndex = next);
+                              },
+                            ),
+                          if (isAdmin) const SizedBox(height: AppSpacing.md),
                           TextField(
                             controller: _searchController,
                             decoration: const InputDecoration(
@@ -255,7 +284,15 @@ class _TxHistoryScreenState extends ConsumerState<TxHistoryScreen> {
             ),
           );
         },
-      ),
+      );
+
+    if (widget.embedded) {
+      return SafeArea(child: body);
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Transactions')),
+      body: body,
     );
   }
 
@@ -322,6 +359,144 @@ class _TxHistoryScreenState extends ConsumerState<TxHistoryScreen> {
   String _formatEnvironmentLabel(String environment) {
     if (environment.isEmpty) return 'Custom';
     return environment[0].toUpperCase() + environment.substring(1);
+  }
+}
+
+class _PendingDepositsView extends ConsumerWidget {
+  const _PendingDepositsView({required this.searchController});
+
+  final TextEditingController searchController;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final async = ref.watch(pendingDepositsProvider);
+    final query = searchController.text.trim().toLowerCase();
+
+    return async.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('Failed to load pending deposits: $e')),
+      data: (items) {
+        final filtered = items.where((i) {
+          if (query.isEmpty) return true;
+          return i.txId.toLowerCase().contains(query) ||
+              i.userId.toLowerCase().contains(query) ||
+              i.gateway.toLowerCase().contains(query);
+        }).toList(growable: false);
+
+        return Padding(
+          padding: context.pagePadding,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: context.contentMaxWidth),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Pending deposits',
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Refresh',
+                        onPressed: () => ref.invalidate(pendingDepositsProvider),
+                        icon: const Icon(Icons.refresh_outlined),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? InfoCard(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.fact_check_outlined, size: 40),
+                                const SizedBox(height: AppSpacing.sm),
+                                Text(
+                                  'No pending deposits',
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                                const SizedBox(height: AppSpacing.xs),
+                                Text(
+                                  'Manual deposits will appear here for review.',
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.md),
+                            itemBuilder: (context, index) {
+                              final item = filtered[index];
+                              return InfoCard(
+                                padding: const EdgeInsets.all(AppSpacing.md),
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => AdminDepositReviewScreen(item: item),
+                                    ),
+                                  );
+                                },
+                                child: Row(
+                                  children: [
+                                    CircleAvatar(
+                                      backgroundColor: AppColors.surface,
+                                      child: Text(
+                                        item.gateway.isNotEmpty ? item.gateway[0].toUpperCase() : '?',
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppSpacing.md),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'ETB ${item.amount.toStringAsFixed(2)}',
+                                            style: theme.textTheme.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          const SizedBox(height: AppSpacing.xs),
+                                          Text(
+                                            '${item.gateway} • ${item.userId}',
+                                            style: theme.textTheme.bodyMedium?.copyWith(
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: AppSpacing.xs),
+                                          Text(
+                                            'Tx: ${item.txId}',
+                                            style: theme.textTheme.bodySmall?.copyWith(
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppSpacing.sm),
+                                    Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

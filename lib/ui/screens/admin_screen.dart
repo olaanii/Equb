@@ -6,24 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AdminScreen extends ConsumerWidget {
-  const AdminScreen({super.key});
+  const AdminScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final flagsAsync = ref.watch(featureFlagsProvider);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Admin Console'),
-        actions: [
-          IconButton(
-            tooltip: 'Export config snapshot',
-            icon: const Icon(Icons.download_outlined),
-            onPressed: () {},
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: flagsAsync.when(
+    final body = flagsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, st) => Center(child: Text('Failed to load flags: $e')),
           data:
@@ -125,7 +115,7 @@ class AdminScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: AppSpacing.lg),
                             Text(
-                              'Credentials live in SecureStorage on this device. Wire remote config before rolling out to multiple operators.',
+                              'Feature flags are stored in Firebase Realtime Database. Gateway credentials still live in SecureStorage on each operator device.',
                               style: AppTextStyles.bodyText2,
                             ),
                           ],
@@ -136,8 +126,24 @@ class AdminScreen extends ConsumerWidget {
                   return body;
                 },
               ),
-        ),
+        );
+
+    if (embedded) {
+      return SafeArea(child: body);
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Admin Console'),
+        actions: [
+          IconButton(
+            tooltip: 'Export config snapshot',
+            icon: const Icon(Icons.download_outlined),
+            onPressed: () {},
+          ),
+        ],
       ),
+      body: SafeArea(child: body),
     );
   }
 }

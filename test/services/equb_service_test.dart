@@ -1,23 +1,32 @@
+import 'package:equb/models/equb_model.dart';
+import 'package:equb/models/transaction_model.dart';
+import 'package:equb/services/equb_service.dart';
+import 'package:equb/services/firestore_equb_repository.dart';
+import 'package:equb/services/payment_service.dart';
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-void main() {
-  test('Firestore-dependent tests disabled (auth-only mode)', () {
-    // Intentionally empty.
-  });
-}
-  Future<TransactionModel> verifyPayment(String transactionId) async {
-    return TransactionModel(
-      id: transactionId,
-      fromUserId: 'mock_user',
-      toUserId: 'mock_target',
-      amount: 100,
-      status: TransactionStatus.success,
-      timestamp: DateTime.now(),
-    );
+
+class _NoopPaymentService implements PaymentService {
+  @override
+  Future<TransactionModel> createPayment({
+    required String fromUserId,
+    required String toUserId,
+    required double amount,
+    required String gateway,
+    required BuildContext context,
+  }) {
+    throw UnimplementedError('Not needed for these tests');
+  }
+
+  @override
+  Future<TransactionModel> verifyPayment(String transactionId) {
+    throw UnimplementedError('Not needed for these tests');
   }
 }
 
 void main() {
-  group('EqubService Integration Tests', () {
+  group('EqubService (Firestore)', () {
     late FakeFirebaseFirestore firestore;
     late FirestoreEqubRepository repository;
     late EqubService service;
@@ -25,97 +34,57 @@ void main() {
     setUp(() {
       firestore = FakeFirebaseFirestore();
       repository = FirestoreEqubRepository(firestore: firestore);
-      service = EqubService(
-        repository: repository,
-        paymentService: MockPaymentService(),
-      );
+      service = EqubService(repository: repository, paymentService: _NoopPaymentService());
     });
 
-    test('createGroup creates a group and persists it', () async {
+    test('createGroup persists group', () async {
       final group = EqubGroup(
         id: 'g1',
         name: 'Test Group',
         contributionAmount: 500,
-        members: ['u1'],
-        scheduleConfig: EqubScheduleConfig(cycle: EqubCycle.monthly),
+        members: const ['u1'],
       );
 
       final created = await service.createGroup(group, actingUserId: 'u1');
 
       expect(created.id, 'g1');
-      final stored = await repository.findGroup('g1');
+      final stored = await repository.findGroup('g1', syncRotation: false);
       expect(stored, isNotNull);
       expect(stored!.name, 'Test Group');
       expect(stored.members, contains('u1'));
     });
 
     test('updateGroup updates existing group', () async {
-      // Setup
       final group = EqubGroup(
         id: 'g1',
         name: 'Original Name',
         contributionAmount: 100,
-        members: ['u1'],
+        members: const ['u1'],
       );
-      await repository.createGroup(group);
+      await service.createGroup(group, actingUserId: 'u1');
 
-      // Act
-      final updated = group.copyWith(
-        name: 'Updated Name',
-        contributionAmount: 200,
-      );
+      final updated = group.copyWith(name: 'Updated Name', contributionAmount: 200);
       await service.updateGroup(updated, actingUserId: 'u1');
 
-      // Assert
-      final stored = await repository.findGroup('g1');
+      final stored = await repository.findGroup('g1', syncRotation: false);
+      expect(stored, isNotNull);
       expect(stored!.name, 'Updated Name');
       expect(stored.contributionAmount, 200);
     });
 
     test('deleteGroup removes group', () async {
-      // Setup
       final group = EqubGroup(
         id: 'g1',
         name: 'To Delete',
         contributionAmount: 100,
+        members: const ['u1'],
       );
-      await repository.createGroup(group);
+      await service.createGroup(group, actingUserId: 'u1');
 
-      // Act
       await service.deleteGroup('g1');
 
-      // Assert
-      final stored = await repository.findGroup('g1');
+      final stored = await repository.findGroup('g1', syncRotation: false);
       expect(stored, isNull);
-    });
-
-    test('getGroup syncs rotation state (basic check)', () async {
-      // Setup
-      final group = EqubGroup(
-        id: 'g1',
-        name: 'Sync Test',
-        contributionAmount: 100,
-        members: ['u1', 'u2'],
-        scheduleConfig: EqubScheduleConfig(
-          cycle: EqubCycle.daily,
-          startDate: DateTime.now().subtract(const Duration(days: 2)),
-        ),
-      );
-      await repository.createGroup(group);
-
-      // Act
-      // getGroup calls repository.findGroup which calls rotationEngine.syncState
-      final retrieved = await service.getGroup('g1');
-
-      // Assert
-      expect(retrieved, isNotNull);
-      // syncState updates nextPayoutDate to be in the future
-      expect(
-        retrieved!.rotationState.nextPayoutDate.isAfter(DateTime.now()),
-        isTrue,
-      );
-      // currentRound should not advance just by time passing if no payouts occurred
-      expect(retrieved.rotationState.currentRound, 0);
     });
   });
 }

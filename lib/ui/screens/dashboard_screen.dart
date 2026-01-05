@@ -1,6 +1,7 @@
 import 'package:equb/models/transaction_model.dart';
 import 'package:equb/models/equb_model.dart';
 import 'package:equb/models/user_model.dart';
+import 'package:equb/providers/admin_providers.dart';
 import 'package:equb/providers/providers.dart';
 import 'package:equb/ui/responsive.dart';
 import 'package:equb/ui/screens/admin_screen.dart';
@@ -21,6 +22,8 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider).value;
+    final isAdmin = ref.watch(isAdminProvider).asData?.value == true;
+    final isSuperAdmin = ref.watch(isSuperAdminProvider).asData?.value == true;
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isWide = context.isTablet || context.isDesktop;
@@ -29,18 +32,13 @@ class DashboardScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text('Dashboard'),
         actions: [
-          if (user != null &&
-              (user.role == UserRole.equbAdmin ||
-                  user.role == UserRole.superAdmin))
+          if (isAdmin)
             IconButton(
-              onPressed:
-                  () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const AdminScreen()),
-                  ),
+              onPressed: () => Navigator.of(context).pushNamed('/admin'),
               icon: const Icon(Icons.admin_panel_settings_outlined),
               tooltip: 'Admin Panel',
             ),
-          if (user != null && user.role == UserRole.superAdmin)
+          if (isSuperAdmin)
             IconButton(
               onPressed:
                   () => Navigator.of(context).push(
@@ -49,9 +47,7 @@ class DashboardScreen extends ConsumerWidget {
               icon: const Icon(Icons.security_outlined),
               tooltip: 'Super Admin',
             ),
-          if (user != null &&
-              (user.role == UserRole.equbAdmin ||
-                  user.role == UserRole.superAdmin))
+          if (isAdmin)
             IconButton(
               onPressed:
                   () => Navigator.of(context).push(
@@ -90,24 +86,20 @@ class DashboardScreen extends ConsumerWidget {
         ),
       ),
       floatingActionButton:
-          user != null &&
-                  (user.role == UserRole.equbAdmin ||
-                      user.role == UserRole.superAdmin)
+          user != null
               ? FloatingActionButton(
                 heroTag: 'fab_dashboard_add',
-                onPressed: () => _showGroupDialog(context, ref, user),
+                onPressed: () => _showGroupDialog(context, ref),
                 child: const Icon(Icons.add),
               )
               : null,
     );
   }
 
-  void _showGroupDialog(
-    BuildContext context,
-    WidgetRef ref,
-    UserModel user,
-  ) async {
+  void _showGroupDialog(BuildContext context, WidgetRef ref) async {
     final messenger = ScaffoldMessenger.of(context);
+    final actingUserId =
+        ref.read(firebaseAuthUserProvider).asData?.value?.uid ?? 'u_demo';
     final created = await showDialog<EqubGroup?>(
       context: context,
       builder: (_) => const GroupDialog(),
@@ -119,7 +111,7 @@ class DashboardScreen extends ConsumerWidget {
         // The repo.createGroup usually handles ID generation if we pass empty or null,
         // but let's check our repo implementation.
         // FirestoreEqubRepository uses doc().id if id is empty.
-        await equbRepo.createGroup(created, actingUserId: user.id);
+        await equbRepo.createGroup(created, actingUserId: actingUserId);
         ref.invalidate(equbGroupsProvider); // Refresh list
         messenger.showSnackBar(
           const SnackBar(content: Text('Group created successfully')),

@@ -7,6 +7,7 @@ import 'package:equb/services/adapters/telebirr_impl.dart';
 import 'package:equb/services/adapters/cbe_impl.dart';
 import 'package:equb/services/secure_storage_service.dart';
 import 'package:equb/services/system_log_service.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class PaymentGatewayConfig {
   final String id;
@@ -58,15 +59,57 @@ class PaymentGatewayConfig {
       );
 }
 
+PaymentGatewayConfig _fromRtdb(String id, Map<String, dynamic> m) {
+  final rawMeta = m['meta'];
+  Map<String, dynamic> meta;
+  if (rawMeta is Map) {
+    meta = Map<String, dynamic>.from(rawMeta);
+  } else if (rawMeta is String && rawMeta.trim().isNotEmpty) {
+    try {
+      final decoded = jsonDecode(rawMeta);
+      meta = decoded is Map ? Map<String, dynamic>.from(decoded) : <String, dynamic>{};
+    } catch (_) {
+      meta = <String, dynamic>{};
+    }
+  } else {
+    meta = <String, dynamic>{};
+  }
+
+  return PaymentGatewayConfig(
+    id: id,
+    name: (m['name'] as String?)?.trim().isNotEmpty == true
+        ? (m['name'] as String)
+        : id,
+    enabled: (m['enabled'] as bool?) ?? false,
+    meta: meta,
+    environment: (m['environment'] as String?) ?? 'mock',
+  );
+}
+
+Map<String, dynamic> _toRtdb(PaymentGatewayConfig cfg) {
+  return <String, dynamic>{
+    'id': cfg.id,
+    'name': cfg.name,
+    'enabled': cfg.enabled,
+    'environment': cfg.environment,
+    'meta': cfg.meta,
+  };
+}
+
 class GatewayService {
   GatewayService({
+    FirebaseDatabase? database,
     GatewaySecretStore? secretStore,
     SystemLogService? logService,
   }) : _secretStore = secretStore,
-       _logService = logService;
+       _logService = logService,
+       _db = database ?? FirebaseDatabase.instance;
 
   final GatewaySecretStore? _secretStore;
   final SystemLogService? _logService;
+  final FirebaseDatabase _db;
+
+  DatabaseReference get _gatewaysRef => _db.ref('config/gateways');
 
   final List<PaymentGatewayConfig> _configs = [
     PaymentGatewayConfig(
@@ -103,11 +146,13 @@ class GatewayService {
   ];
 
   Future<List<PaymentGatewayConfig>> listGateways({FeatureFlags? flags}) async {
+    final remote = await _loadRemoteConfigs();
+    final merged = _mergeConfigs(_configs, remote);
     final secrets = await _secretStore?.readSecrets();
     if (flags == null || flags.gatewayFlags.isEmpty) {
-      return List.unmodifiable(_injectSecrets(_configs, secrets));
+      return List.unmodifiable(_injectSecrets(merged, secrets));
     }
-    return _injectSecrets(_configs, secrets)
+    return _injectSecrets(merged, secrets)
         .map((config) {
           final override = flags.gatewayFlags[config.id];
           if (override == null) return config;
@@ -123,6 +168,65 @@ class GatewayService {
     } else {
       _configs[index] = cfg;
     }
+
+    try {
+      await _gatewaysRef.child(cfg.id).set(_toRtdb(cfg));
+    } catch (e) {
+      _logService?.log(
+        LogLevel.error,
+        'GatewayService.upsertGateway',
+        'Failed to persist gateway config',
+        context: {'gatewayId': cfg.id, 'error': e.toString()},
+      );
+      rethrow;
+    }
+  }
+
+  Future<List<PaymentGatewayConfig>> _loadRemoteConfigs() async {
+    try {
+      final snapshot = await _gatewaysRef.get();
+      final raw = snapshot.value;
+      if (raw == null || raw is! Map) return const <PaymentGatewayConfig>[];
+
+      final out = <PaymentGatewayConfig>[];
+      for (final entry in raw.entries) {
+        final value = entry.value;
+        if (value is! Map) continue;
+        final map = Map<String, dynamic>.from(value);
+        final id = (map['id'] as String?)?.trim().isNotEmpty == true
+            ? (map['id'] as String)
+            : entry.key.toString();
+        out.add(_fromRtdb(id, map));
+      }
+      return out;
+    } catch (_) {
+      return const <PaymentGatewayConfig>[];
+    }
+  }
+
+  List<PaymentGatewayConfig> _mergeConfigs(
+    List<PaymentGatewayConfig> defaults,
+    List<PaymentGatewayConfig> remote,
+  ) {
+    if (remote.isEmpty) return defaults;
+    final byId = <String, PaymentGatewayConfig>{
+      for (final cfg in defaults) cfg.id: cfg,
+    };
+    for (final r in remote) {
+      final existing = byId[r.id];
+      if (existing == null) {
+        byId[r.id] = r;
+        continue;
+      }
+      byId[r.id] = PaymentGatewayConfig(
+        id: existing.id,
+        name: r.name.isNotEmpty ? r.name : existing.name,
+        enabled: r.enabled,
+        environment: r.environment,
+        meta: r.meta.isNotEmpty ? r.meta : existing.meta,
+      );
+    }
+    return byId.values.toList(growable: false);
   }
 
   /// Returns a PaymentService adapter for the given gateway id if configured.

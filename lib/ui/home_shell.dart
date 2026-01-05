@@ -8,17 +8,18 @@ import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:equb/ui/widgets/custom_bottom_nav_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class HomeShell extends StatefulWidget {
+import 'package:equb/providers/app_providers.dart';
+
+class HomeShell extends ConsumerStatefulWidget {
   const HomeShell({super.key});
 
   @override
-  State<HomeShell> createState() => _HomeShellState();
+  ConsumerState<HomeShell> createState() => _HomeShellState();
 }
 
-class _HomeShellState extends State<HomeShell> {
-  int _index = 0;
-
+class _HomeShellState extends ConsumerState<HomeShell> {
   final _pages = const <Widget>[
     HomeScreen(),
     WalletTabScreen(),
@@ -47,6 +48,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final index = ref.watch(selectedTabIndexProvider);
     final navDestinations =
         _navItems
             .map(
@@ -59,10 +61,10 @@ class _HomeShellState extends State<HomeShell> {
             .toList();
 
     final content = _ContentContainer(
-      child: IndexedStack(index: _index, children: _pages),
+      child: IndexedStack(index: index, children: _pages),
     );
 
-    final shell = _buildShellLayout(context, content, navDestinations);
+    final shell = _buildShellLayout(context, index, content, navDestinations);
 
     return Shortcuts(
       shortcuts: <LogicalKeySet, Intent>{
@@ -98,21 +100,22 @@ class _HomeShellState extends State<HomeShell> {
         actions: <Type, Action<Intent>>{
           _NextTabIntent: CallbackAction<_NextTabIntent>(
             onInvoke: (_) {
-              setState(() => _index = (_index + 1) % _pages.length);
+              ref.read(selectedTabIndexProvider.notifier).state =
+                  (index + 1) % _pages.length;
               return null;
             },
           ),
           _PrevTabIntent: CallbackAction<_PrevTabIntent>(
             onInvoke: (_) {
-              setState(
-                () => _index = (_index - 1 + _pages.length) % _pages.length,
-              );
+              ref.read(selectedTabIndexProvider.notifier).state =
+                  (index - 1 + _pages.length) % _pages.length;
               return null;
             },
           ),
           _GoTabIntent: CallbackAction<_GoTabIntent>(
             onInvoke: (intent) {
-              setState(() => _index = intent.index.clamp(0, _pages.length - 1));
+              ref.read(selectedTabIndexProvider.notifier).state = intent.index
+                  .clamp(0, _pages.length - 1);
               return null;
             },
           ),
@@ -124,6 +127,7 @@ class _HomeShellState extends State<HomeShell> {
 
   Widget _buildShellLayout(
     BuildContext context,
+    int index,
     Widget content,
     List<NavigationDestination> navDestinations,
   ) {
@@ -133,8 +137,10 @@ class _HomeShellState extends State<HomeShell> {
           child: Row(
             children: [
               _DesktopRail(
-                index: _index,
-                onSelect: (i) => setState(() => _index = i),
+                index: index,
+                onSelect:
+                    (i) =>
+                        ref.read(selectedTabIndexProvider.notifier).state = i,
                 items: _navItems,
               ),
               const VerticalDivider(width: 1),
@@ -151,8 +157,10 @@ class _HomeShellState extends State<HomeShell> {
           child: Row(
             children: [
               _DesktopRail(
-                index: _index,
-                onSelect: (i) => setState(() => _index = i),
+                index: index,
+                onSelect:
+                    (i) =>
+                        ref.read(selectedTabIndexProvider.notifier).state = i,
                 items: _navItems,
                 extended: false,
               ),
@@ -167,8 +175,10 @@ class _HomeShellState extends State<HomeShell> {
     return Scaffold(
       body: SafeArea(child: content),
       bottomNavigationBar: CustomBottomNavBar(
-        selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
+        selectedIndex: index,
+        onDestinationSelected:
+            (value) =>
+                ref.read(selectedTabIndexProvider.notifier).state = value,
         items: _navItems
             .map(
               (item) => CustomNavItem(

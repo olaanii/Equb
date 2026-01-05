@@ -1,14 +1,19 @@
 import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class WalletTabScreen extends StatefulWidget {
+import 'package:equb/models/equb_model.dart';
+import 'package:equb/models/user_model.dart';
+import 'package:equb/providers/providers.dart';
+
+class WalletTabScreen extends ConsumerStatefulWidget {
   const WalletTabScreen({super.key});
 
   @override
-  State<WalletTabScreen> createState() => _WalletTabScreenState();
+  ConsumerState<WalletTabScreen> createState() => _WalletTabScreenState();
 }
 
-class _WalletTabScreenState extends State<WalletTabScreen> {
+class _WalletTabScreenState extends ConsumerState<WalletTabScreen> {
   int _segment = 0;
 
   final _tx = const <_WalletTxItem>[
@@ -21,6 +26,8 @@ class _WalletTabScreenState extends State<WalletTabScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final groupsAsync = ref.watch(equbGroupsProvider);
+    final user = ref.watch(currentUserProvider).value;
 
     return Scaffold(
       appBar: AppBar(
@@ -45,15 +52,15 @@ class _WalletTabScreenState extends State<WalletTabScreen> {
                   Text(
                     'Available balance',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurface.withOpacity(0.7),
-                        ),
+                      color: scheme.onSurface.withOpacity(0.7),
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     'ETB 1,459.70',
                     style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 14),
                   Row(
@@ -90,19 +97,7 @@ class _WalletTabScreenState extends State<WalletTabScreen> {
           ),
           const SizedBox(height: 16),
           if (_segment == 0) ...[
-            _WalletOverviewCard(
-              title: 'Spending',
-              value: '127.96',
-              subtitle: 'This week',
-              icon: Icons.bar_chart_rounded,
-            ),
-            const SizedBox(height: 12),
-            _WalletOverviewCard(
-              title: 'Income',
-              value: '494.54',
-              subtitle: 'This week',
-              icon: Icons.trending_up_rounded,
-            ),
+            _EqubWalletOverview(groupsAsync: groupsAsync, user: user),
           ] else ...[
             ..._tx.map((t) => _WalletTxTile(item: t)),
           ],
@@ -110,6 +105,101 @@ class _WalletTabScreenState extends State<WalletTabScreen> {
         ],
       ),
     );
+  }
+}
+
+class _EqubWalletOverview extends StatelessWidget {
+  const _EqubWalletOverview({required this.groupsAsync, required this.user});
+
+  final AsyncValue<List<EqubGroup>> groupsAsync;
+  final UserModel? user;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return groupsAsync.when(
+      data: (groups) {
+        final uid = user?.id;
+        final requiredLocked = groups.fold<double>(0.0, (sum, g) {
+          if (uid == null) return sum;
+          final required = g.contributionAmount;
+          final contributed = g.rotationState.contributionProgress[uid] ?? 0.0;
+          final missing = (required - contributed).clamp(0.0, required);
+          return sum + missing;
+        });
+
+        EqubGroup? nextPayoutGroup;
+        if (uid != null) {
+          for (final g in groups) {
+            final queue = g.rotationState.payoutQueue;
+            if (queue.isNotEmpty && queue.first == uid) {
+              nextPayoutGroup = g;
+              break;
+            }
+          }
+        }
+
+        return Column(
+          children: [
+            _WalletOverviewCard(
+              title: 'Locked in Equb',
+              value: requiredLocked.toStringAsFixed(0),
+              subtitle: 'Remaining to pay this cycle',
+              icon: Icons.lock_outline_rounded,
+            ),
+            const SizedBox(height: 12),
+            _WalletOverviewCard(
+              title: 'Upcoming payout',
+              value:
+                  nextPayoutGroup == null
+                      ? '—'
+                      : nextPayoutGroup!.poolAmountPerCycle.toStringAsFixed(0),
+              subtitle:
+                  nextPayoutGroup == null
+                      ? 'Not next in any group'
+                      : '${nextPayoutGroup!.name} • ${_formatDate(nextPayoutGroup!.rotationState.nextPayoutDate)}',
+              icon: Icons.emoji_events_outlined,
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: scheme.primary.withOpacity(0.18),
+                  child: Icon(Icons.info_outline, color: scheme.primary),
+                ),
+                title: const Text('Transaction tagging'),
+                subtitle: Text(
+                  'Equb contributions and payouts are tagged automatically when coming from Equb flows.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurface.withOpacity(0.7),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+      loading:
+          () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+      error:
+          (err, _) => Text(
+            'Failed to load Equb wallet summary: $err',
+            style: theme.textTheme.bodySmall?.copyWith(color: scheme.error),
+          ),
+    );
+  }
+
+  static String _formatDate(DateTime date) {
+    final local = date.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year;
+    return '$day/$month/$year';
   }
 }
 
@@ -139,9 +229,9 @@ class _WalletOverviewCard extends StatelessWidget {
         subtitle: Text(subtitle),
         trailing: Text(
           value,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w800),
         ),
       ),
     );
@@ -169,6 +259,11 @@ class _WalletTxTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final isPositive = item.amount.trimLeft().startsWith('+');
+    final lowerTitle = item.title.toLowerCase();
+    final tag =
+        lowerTitle.contains('equb')
+            ? 'Equb'
+            : (lowerTitle.contains('payout') ? 'Equb Payout' : null);
 
     return Card(
       child: ListTile(
@@ -180,13 +275,13 @@ class _WalletTxTile extends StatelessWidget {
           ),
         ),
         title: Text(item.title),
-        subtitle: Text(item.date),
+        subtitle: Text(tag == null ? item.date : '${item.date} • $tag'),
         trailing: Text(
           item.amount,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: isPositive ? AppColors.success : scheme.onSurface,
-              ),
+            fontWeight: FontWeight.w800,
+            color: isPositive ? AppColors.success : scheme.onSurface,
+          ),
         ),
       ),
     );

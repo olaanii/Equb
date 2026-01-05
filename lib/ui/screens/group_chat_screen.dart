@@ -100,6 +100,11 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                         const SizedBox(height: 8),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: _ThisRoundSummaryCard(groupId: widget.groupId),
+                        ),
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
                           child: InfoCard(
                             padding: const EdgeInsets.all(16),
                             child: Row(
@@ -605,6 +610,377 @@ class _RotationDetailsPrompt extends StatelessWidget {
   }
 }
 
+class _ThisRoundSummaryCard extends ConsumerWidget {
+  const _ThisRoundSummaryCard({required this.groupId});
+
+  final String groupId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final asyncGroup = ref.watch(equbGroupProvider(groupId));
+    final metricsValue = ref.watch(equbGroupMetricsProvider(groupId));
+    final user = ref.watch(currentUserProvider).value;
+
+    return asyncGroup.when(
+      data: (group) {
+        final metrics = metricsValue.asData?.value;
+        if (group == null || metrics == null) {
+          return const SizedBox(
+            height: 90,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        final equb = group;
+        final totalMembers = equb.members.length;
+        final nextRecipient = metrics.nextRecipient;
+        final nextRound = metrics.nextRound ?? (metrics.currentRound + 1);
+        final roundInSeason = _GroupRotationBanner._roundWithinSeason(
+          nextRound,
+          totalMembers,
+        );
+        final roleLabel = _GroupRotationBanner._roleForRoundInSeason(
+          roundInSeason,
+          totalMembers,
+        );
+
+        final requiredAmount = equb.contributionAmount;
+        final progress = equb.rotationState.contributionProgress;
+
+        Future<void> handleContribute() async {
+          if (user == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Sign in to contribute.')),
+            );
+            return;
+          }
+
+          final repo = ref.read(equbRepositoryProvider);
+          try {
+            await repo.contribute(
+              groupId: equb.id,
+              userId: user.id,
+              context: context,
+            );
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Contribution recorded: ETB ${requiredAmount.toStringAsFixed(0)}',
+                ),
+              ),
+            );
+          } catch (e) {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('Failed to contribute: $e')));
+          }
+
+          ref.invalidate(equbRepositoryProvider);
+          ref.invalidate(equbGroupProvider(equb.id));
+          ref.invalidate(equbGroupMetricsProvider(equb.id));
+          ref.invalidate(equbRoundSummariesProvider(equb.id));
+        }
+
+        return InfoCard(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('This round', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Chip(
+                    label: Text(
+                      'ETB ${requiredAmount.toStringAsFixed(0)}',
+                      style: theme.textTheme.labelSmall,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    avatar: const Icon(Icons.payments_outlined, size: 14),
+                  ),
+                  Chip(
+                    label: Text(
+                      'Every ${equb.scheduleConfig.cycleLengthDays} days',
+                      style: theme.textTheme.labelSmall,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    avatar: const Icon(Icons.calendar_month_outlined, size: 14),
+                  ),
+                  Chip(
+                    label: Text(
+                      'Next payout ${_GroupRotationBanner._formatDate(metrics.nextPayoutDate)}',
+                      style: theme.textTheme.labelSmall,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    avatar: const Icon(Icons.emoji_events_outlined, size: 14),
+                  ),
+                ],
+              ),
+              if (nextRecipient != null) ...[
+                const SizedBox(height: 6),
+                Text(
+                  'Next winner: ${_GroupRotationBanner._formatMember(nextRecipient)}${roleLabel.isEmpty ? '' : ' ($roleLabel)'}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Contribution status',
+                      style: theme.textTheme.labelSmall,
+                    ),
+                  ),
+                  FilledButton.icon(
+                    onPressed: handleContribute,
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Pay this cycle'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              for (final member in equb.members)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _MemberPaidRow(
+                    memberLabel: _GroupRotationBanner._formatMember(member),
+                    contributed: progress[member] ?? 0.0,
+                    requiredAmount: requiredAmount,
+                    highlight: user != null && member == user.id,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+      loading:
+          () => const SizedBox(
+            height: 90,
+            child: Center(child: CircularProgressIndicator()),
+          ),
+      error:
+          (err, _) => InfoCard(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'Unable to load this round summary: $err',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+    );
+  }
+}
+
+class _MemberPaidRow extends StatelessWidget {
+  const _MemberPaidRow({
+    required this.memberLabel,
+    required this.contributed,
+    required this.requiredAmount,
+    required this.highlight,
+  });
+
+  final String memberLabel;
+  final double contributed;
+  final double requiredAmount;
+  final bool highlight;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final paid =
+        requiredAmount <= 0 ? true : contributed + 1e-8 >= requiredAmount;
+    final statusColor = paid ? AppColors.success : theme.colorScheme.error;
+
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            memberLabel,
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontWeight: highlight ? FontWeight.w600 : FontWeight.w400,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Chip(
+          label: Text(
+            paid ? 'Paid' : 'Not paid',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: statusColor,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          backgroundColor: statusColor.withOpacity(0.10),
+          visualDensity: VisualDensity.compact,
+          side: BorderSide(color: statusColor.withOpacity(0.35)),
+          avatar: Icon(
+            paid ? Icons.check_circle_outline : Icons.schedule,
+            size: 16,
+            color: statusColor,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _RoundTimelineStrip extends StatelessWidget {
+  const _RoundTimelineStrip({
+    required this.summaries,
+    required this.memberCount,
+    required this.nextRecipient,
+  });
+
+  final List<EqubRoundSummary> summaries;
+  final int memberCount;
+  final String? nextRecipient;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final upcoming = summaries
+        .where((s) => s.status != EqubRoundStatus.completed)
+        .take(10)
+        .toList(growable: false);
+
+    if (upcoming.isEmpty) {
+      return Text(
+        'No upcoming rounds available.',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: AppColors.textSecondary,
+        ),
+      );
+    }
+
+    Color statusColor(EqubRoundStatus status) {
+      switch (status) {
+        case EqubRoundStatus.completed:
+          return AppColors.success;
+        case EqubRoundStatus.pending:
+          return theme.colorScheme.primary;
+        case EqubRoundStatus.overdue:
+          return theme.colorScheme.error;
+      }
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (int i = 0; i < upcoming.length; i++) ...[
+            if (i > 0) const SizedBox(width: 8),
+            _RoundChip(
+              round: upcoming[i].round,
+              memberId: upcoming[i].memberId,
+              status: upcoming[i].status,
+              isNext:
+                  nextRecipient != null &&
+                  upcoming[i].memberId == nextRecipient,
+              memberCount: memberCount,
+              color: statusColor(upcoming[i].status),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RoundChip extends StatelessWidget {
+  const _RoundChip({
+    required this.round,
+    required this.memberId,
+    required this.status,
+    required this.isNext,
+    required this.memberCount,
+    required this.color,
+  });
+
+  final int round;
+  final String memberId;
+  final EqubRoundStatus status;
+  final bool isNext;
+  final int memberCount;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roundInSeason = _GroupRotationBanner._roundWithinSeason(
+      round,
+      memberCount,
+    );
+    final role = _GroupRotationBanner._roleForRoundInSeason(
+      roundInSeason,
+      memberCount,
+    );
+    final label = 'R$roundInSeason';
+    final subtitle = _GroupRotationBanner._formatMember(memberId);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isNext ? 0.18 : 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: color.withOpacity(isNext ? 0.65 : 0.35),
+          width: isNext ? 1.3 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                ),
+              ),
+              if (role.isNotEmpty) ...[
+                const SizedBox(width: 6),
+                Text(
+                  role,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              if (isNext) ...[
+                const SizedBox(width: 6),
+                Icon(Icons.star_rounded, size: 16, color: color),
+              ],
+            ],
+          ),
+          const SizedBox(height: 2),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 140),
+            child: Text(
+              subtitle,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _GroupRotationBanner extends ConsumerWidget {
   const _GroupRotationBanner({required this.groupId});
 
@@ -938,6 +1314,14 @@ class _GroupRotationBanner extends ConsumerWidget {
                   highlight: member == nextCandidate,
                 ),
               if (queuePreview.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text('Round timeline', style: theme.textTheme.labelSmall),
+                const SizedBox(height: 8),
+                _RoundTimelineStrip(
+                  summaries: summaries,
+                  memberCount: totalMembers,
+                  nextRecipient: nextCandidate,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Season $nextSeason queue (random order)',

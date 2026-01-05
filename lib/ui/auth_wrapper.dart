@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:equb/providers/providers.dart';
 import 'package:equb/providers/app_providers.dart';
+import 'package:equb/models/user_model.dart';
 import 'package:equb/ui/home_shell.dart';
 import 'package:equb/ui/screens/auth/login_screen.dart';
 import 'package:equb/ui/screens/onboarding/onboarding_screen.dart';
@@ -9,15 +10,41 @@ import 'package:equb/services/system_log_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class AuthWrapper extends ConsumerWidget {
+class AuthWrapper extends ConsumerStatefulWidget {
   const AuthWrapper({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // 1. Check Auth State first. If user is already logged in, skip onboarding.
-    final authState = ref.watch(currentUserProvider);
-    final signedInUser = authState.asData?.value;
-    if (signedInUser != null) {
+  ConsumerState<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends ConsumerState<AuthWrapper> {
+  String? _lastTokenUserId;
+
+  @override
+  Widget build(BuildContext context) {
+    // Non-blocking side effect: when we have a current user profile, try to
+    // register FCM token into RTDB so push alerts can be delivered later.
+    // Riverpod requires ref.listen to be called during build.
+    ref.listen<AsyncValue<UserModel?>>(currentUserProvider, (prev, next) {
+      final user = next.asData?.value;
+      if (user == null) return;
+      if (_lastTokenUserId == user.id) return;
+      _lastTokenUserId = user.id;
+
+      try {
+        unawaited(
+          ref.read(deviceTokenRegistrarProvider).registerIfNeeded(user),
+        );
+      } catch (_) {
+        // Firebase not initialized or registrar unavailable.
+      }
+    });
+
+    // 1. Check Firebase Auth State first. If user is logged in, skip onboarding
+    // and do not block navigation on profile/RTDB availability.
+    final firebaseAuthState = ref.watch(firebaseAuthUserProvider);
+    final firebaseUser = firebaseAuthState.asData?.value;
+    if (firebaseUser != null) {
       return const HomeShell();
     }
 
@@ -33,10 +60,8 @@ class AuthWrapper extends ConsumerWidget {
         }
 
         // 3. Render Auth State (Login or Loading/Error)
-        return authState.when(
+        return firebaseAuthState.when(
           data: (user) {
-            // This case (user != null) is covered by the top check,
-            // but kept for safety/completeness.
             if (user != null) return const HomeShell();
             return const LoginScreen();
           },
@@ -54,19 +79,19 @@ class AuthWrapper extends ConsumerWidget {
                 logService.log(
                   LogLevel.info,
                   'AuthWrapper',
-                  'User tapped retry from session error state',
+                  'User tapped retry from auth error state',
                   context: errorProps,
                 );
                 unawaited(
                   analytics.track('auth_session_retry', properties: errorProps),
                 );
-                ref.invalidate(currentUserProvider);
+                ref.invalidate(firebaseAuthUserProvider);
               },
               onOpenLogin: () {
                 logService.log(
                   LogLevel.info,
                   'AuthWrapper',
-                  'User opened login from session error state',
+                  'User opened login from auth error state',
                   context: errorProps,
                 );
                 unawaited(

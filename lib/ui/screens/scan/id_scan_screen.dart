@@ -10,7 +10,7 @@ class IdScanScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scan ID'),
+        title: const Text('Verification'),
         actions: [
           IconButton(
             onPressed: () {},
@@ -28,13 +28,16 @@ class IdScanScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Scan your national ID', style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    'Scan National ID / Passport',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   const SizedBox(height: 8),
                   Text(
-                    'Place your ID within the frame. Make sure it is well-lit and readable.',
+                    'For account verification. Place your document within the frame and ensure it is well-lit and readable.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: scheme.onSurface.withOpacity(0.7),
-                        ),
+                      color: scheme.onSurface.withOpacity(0.7),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   AspectRatio(
@@ -43,7 +46,9 @@ class IdScanScreen extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: scheme.surfaceVariant,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: scheme.outline.withOpacity(0.35)),
+                        border: Border.all(
+                          color: scheme.outline.withOpacity(0.35),
+                        ),
                       ),
                       child: Stack(
                         children: [
@@ -82,6 +87,18 @@ class IdScanScreen extends StatelessWidget {
                     onPressed: () {},
                     icon: const Icon(Icons.image_search_rounded),
                     label: const Text('Upload photo instead'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextButton.icon(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Manual entry is not implemented yet.'),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Manual entry'),
                   ),
                 ],
               ),

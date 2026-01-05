@@ -3,6 +3,7 @@ import 'package:equb/providers/providers.dart';
 import 'package:equb/ui/responsive.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:equb/ui/widgets/common.dart';
+import 'package:equb/ui/widgets/group_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -74,7 +75,7 @@ class GroupsListScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'fab_groups_create',
-        onPressed: () => _showCreateHint(context),
+        onPressed: () => _handleCreateGroup(context, ref),
         icon: const Icon(Icons.group_add),
         label: const Text('Create Group'),
       ),
@@ -84,14 +85,39 @@ class GroupsListScreen extends ConsumerWidget {
   static String _formatDate(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
-  void _showCreateHint(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Group creation flows are available from the dashboard FAB.',
-        ),
-      ),
+  Future<void> _handleCreateGroup(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final uid = ref.watch(firebaseAuthUserProvider).asData?.value?.uid;
+
+    if (uid == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Sign in required.')),
+      );
+      return;
+    }
+
+    final created = await showDialog<EqubGroup?>(
+      context: context,
+      builder: (_) => const GroupDialog(),
     );
+
+    if (created == null) return;
+
+    try {
+      final equbRepo = ref.read(equbRepositoryProvider);
+      await equbRepo.createGroup(created, actingUserId: uid);
+      ref.invalidate(equbGroupsProvider);
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Group created successfully')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to create group: $e')),
+      );
+    }
   }
 }
 

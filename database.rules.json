@@ -1,0 +1,79 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "config": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('superadmins/' + auth.uid).val() === true",
+
+      "feature_flags": {
+        ".read": "auth != null",
+        ".write": "auth != null && root.child('superadmins/' + auth.uid).val() === true"
+      },
+
+      "gateways": {
+        ".read": "auth != null",
+        ".write": "auth != null && root.child('superadmins/' + auth.uid).val() === true"
+      }
+    },
+
+    "groups": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+
+    "admins": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+
+    "superadmins": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": false
+      }
+    },
+
+    "review_queue": {
+      ".read": false,
+      ".write": false,
+      "deposits": {
+        "$queueId": {
+          // Users can create their own queue entry once; only functions/admin should edit/delete.
+          ".write": "auth != null && !data.exists() && newData.child('userId').val() === auth.uid"
+        }
+      }
+    },
+
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid",
+
+        "role": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid && ((!data.exists() && newData.val() === 'user') || (data.exists() && newData.val() === data.val()))"
+        },
+
+        "transactions": {
+          "$txId": {
+            ".write": "auth != null && auth.uid === $uid && (!data.exists() || (data.child('requiresReview').val() === true ? (newData.child('status').val() === data.child('status').val()) : true))"
+          },
+          ".indexOn": ["timestampMs"]
+        },
+        "notifications": {
+          ".indexOn": ["createdAtMs"]
+        },
+        "points_ledger": {
+          ".indexOn": ["createdAtMs"]
+        },
+        "reminder_jobs": {
+          ".indexOn": ["scheduledAtMs"]
+        }
+      }
+    }
+  }
+}

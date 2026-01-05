@@ -3,13 +3,16 @@ import 'dart:convert';
 import 'package:equb/providers/gateway_providers.dart';
 import 'package:equb/providers/providers.dart';
 import 'package:equb/services/gateway_service.dart';
+import 'package:equb/ui/responsive.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:equb/ui/widgets/common.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class GatewaysScreen extends ConsumerWidget {
-  const GatewaysScreen({super.key});
+  const GatewaysScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -17,9 +20,7 @@ class GatewaysScreen extends ConsumerWidget {
     final gatewaysAsync = ref.watch(gatewayConfigsProvider);
     final gatewayService = ref.watch(gatewayServiceProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Payment Gateways')),
-      body: gatewaysAsync.when(
+    final body = gatewaysAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error:
             (error, stack) => Center(
@@ -57,85 +58,57 @@ class GatewaysScreen extends ConsumerWidget {
             ),
         data: (gateways) {
           final activeCount = gateways.where((g) => g.enabled).length;
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              InfoCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          return Padding(
+            padding: context.pagePadding,
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: context.contentMaxWidth),
+                child: ListView(
                   children: [
-                    Text(
-                      'Gateway overview',
-                      style: theme.textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Manage the payment rails available to your Equb members. Toggle gateways on/off and manage public metadata like callback URLs.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
+                    InfoCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Gateway overview',
+                            style: theme.textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Manage the payment rails available to your Equb members. Toggle gateways on/off and manage public metadata like callback URLs.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              _SummaryChip(
+                                label: 'Total gateways',
+                                value: gateways.length.toString(),
+                              ),
+                              _SummaryChip(
+                                label: 'Active gateways',
+                                value: activeCount.toString(),
+                                color: AppColors.success,
+                              ),
+                              _SummaryChip(
+                                label: 'Sandbox ready',
+                                value:
+                                    '${gateways.where((g) => g.meta.isNotEmpty).length}',
+                                color: AppColors.warning,
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _SummaryChip(
-                          label: 'Total gateways',
-                          value: gateways.length.toString(),
-                        ),
-                        _SummaryChip(
-                          label: 'Active gateways',
-                          value: activeCount.toString(),
-                          color: AppColors.success,
-                        ),
-                        _SummaryChip(
-                          label: 'Sandbox ready',
-                          value:
-                              '${gateways.where((g) => g.meta.isNotEmpty).length}',
-                          color: AppColors.warning,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: PrimaryButton(
-                  text: 'Add gateway',
-                  icon: Icons.add_circle_outline,
-                  onPressed:
-                      () => _openCreateGatewayDialog(
-                        context,
-                        ref,
-                        gatewayService,
-                      ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (gateways.isEmpty)
-                InfoCard(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.wifi_off_rounded, size: 36),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No gateways configured yet',
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Add Telebirr, CBE Birr or custom adapters to let members fund their wallets.',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      PrimaryButton(
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: PrimaryButton(
                         text: 'Add gateway',
                         icon: Icons.add_circle_outline,
                         onPressed:
@@ -145,57 +118,100 @@ class GatewaysScreen extends ConsumerWidget {
                               gatewayService,
                             ),
                       ),
-                    ],
-                  ),
-                )
-              else
-                ...gateways.map(
-                  (config) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: _GatewayCard(
-                      config: config,
-                      onToggle: (value) async {
-                        await gatewayService.upsertGateway(
-                          PaymentGatewayConfig(
-                            id: config.id,
-                            name: config.name,
-                            enabled: value,
-                            meta: config.meta,
-                          ),
-                        );
-                        ref.invalidate(gatewayConfigsProvider);
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              '${config.name} ${value ? 'enabled' : 'disabled'}',
-                            ),
-                          ),
-                        );
-                      },
-                      onConfigure: () async {
-                        final updated = await showDialog<PaymentGatewayConfig?>(
-                          context: context,
-                          builder: (_) => _ConfigDialog(config: config),
-                        );
-                        if (updated != null) {
-                          await gatewayService.upsertGateway(updated);
-                          ref.invalidate(gatewayConfigsProvider);
-                          if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('${config.name} settings saved'),
-                            ),
-                          );
-                        }
-                      },
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    if (gateways.isEmpty)
+                      InfoCard(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.wifi_off_rounded, size: 36),
+                            const SizedBox(height: 12),
+                            Text(
+                              'No gateways configured yet',
+                              style: theme.textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Add Telebirr, CBE Birr or custom adapters to let members fund their wallets.',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            PrimaryButton(
+                              text: 'Add gateway',
+                              icon: Icons.add_circle_outline,
+                              onPressed:
+                                  () => _openCreateGatewayDialog(
+                                    context,
+                                    ref,
+                                    gatewayService,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ...gateways.map(
+                        (config) => Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: _GatewayCard(
+                            config: config,
+                            onToggle: (value) async {
+                              await gatewayService.upsertGateway(
+                                PaymentGatewayConfig(
+                                  id: config.id,
+                                  name: config.name,
+                                  enabled: value,
+                                  meta: config.meta,
+                                ),
+                              );
+                              ref.invalidate(gatewayConfigsProvider);
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '${config.name} ${value ? 'enabled' : 'disabled'}',
+                                  ),
+                                ),
+                              );
+                            },
+                            onConfigure: () async {
+                              final updated = await showDialog<PaymentGatewayConfig?>(
+                                context: context,
+                                builder: (_) => _ConfigDialog(config: config),
+                              );
+                              if (updated != null) {
+                                await gatewayService.upsertGateway(updated);
+                                ref.invalidate(gatewayConfigsProvider);
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('${config.name} settings saved'),
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-            ],
+              ),
+            ),
           );
         },
-      ),
+      );
+
+    if (embedded) {
+      return SafeArea(child: body);
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Payment Gateways')),
+      body: body,
     );
   }
 }

@@ -1,4 +1,7 @@
 import 'package:equb/providers/providers.dart';
+import 'package:equb/models/equb_model.dart';
+import 'package:equb/models/user_model.dart';
+import 'package:equb/providers/app_providers.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +13,7 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final user = ref.watch(currentUserProvider).asData?.value;
+    final groupsAsync = ref.watch(equbGroupsProvider);
 
     final recent = const <_HomeTransactionItem>[
       _HomeTransactionItem(
@@ -78,8 +82,10 @@ class HomeScreen extends ConsumerWidget {
           _BalanceCard(
             name: user?.name ?? 'User',
             balance: '1,459.70',
-            points: '8,230',
+            points: (user?.points ?? 0).toString(),
           ),
+          const SizedBox(height: 16),
+          _MyEqubsSection(groupsAsync: groupsAsync, user: user),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -196,6 +202,160 @@ class _BalanceCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _MyEqubsSection extends ConsumerWidget {
+  const _MyEqubsSection({required this.groupsAsync, required this.user});
+
+  final AsyncValue<List<EqubGroup>> groupsAsync;
+  final UserModel? user;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('My Equbs', style: theme.textTheme.titleMedium),
+                ),
+                TextButton(
+                  onPressed: () {
+                    ref.read(selectedTabIndexProvider.notifier).state = 2;
+                  },
+                  child: const Text('Open'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            groupsAsync.when(
+              data: (groups) {
+                if (groups.isEmpty) {
+                  return Text(
+                    'Join or create a group to start saving together.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: schemeOnSurfaceMuted(context),
+                    ),
+                  );
+                }
+                final shown = groups.take(3).toList(growable: false);
+                return Column(
+                  children: [
+                    for (final g in shown)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _MyEqubTile(group: g, user: user),
+                      ),
+                  ],
+                );
+              },
+              loading:
+                  () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+              error:
+                  (err, _) => Text(
+                    'Failed to load groups: $err',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color schemeOnSurfaceMuted(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return scheme.onSurface.withOpacity(0.7);
+  }
+}
+
+class _MyEqubTile extends StatelessWidget {
+  const _MyEqubTile({required this.group, required this.user});
+
+  final EqubGroup group;
+  final UserModel? user;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final uid = user?.id;
+    final requiredAmount = group.contributionAmount;
+    final contributed =
+        uid == null
+            ? 0.0
+            : (group.rotationState.contributionProgress[uid] ?? 0.0);
+    final paid =
+        requiredAmount <= 0 ? true : contributed + 1e-8 >= requiredAmount;
+    final statusColor = paid ? AppColors.success : scheme.error;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceVariant.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: scheme.primary.withOpacity(0.15),
+              foregroundColor: scheme.primary,
+              child: const Icon(Icons.group_outlined),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(group.name, style: theme.textTheme.bodyLarge),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Next payout ${_formatDate(group.rotationState.nextPayoutDate)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurface.withOpacity(0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Chip(
+              label: Text(
+                paid ? 'Paid' : 'Not paid',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: statusColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              backgroundColor: statusColor.withOpacity(0.10),
+              visualDensity: VisualDensity.compact,
+              side: BorderSide(color: statusColor.withOpacity(0.35)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _formatDate(DateTime date) {
+    final local = date.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year;
+    return '$day/$month/$year';
   }
 }
 

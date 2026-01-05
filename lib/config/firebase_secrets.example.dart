@@ -16,6 +16,7 @@ class FirebaseSecrets {
   static const webAuthDomain = 'REPLACE_ME';
   static const webStorageBucket = 'REPLACE_ME';
   static const webMeasurementId = 'REPLACE_ME';
+  static const webDatabaseUrl = 'https://REPLACE_ME-default-rtdb.firebaseio.com';
 
   // iOS
   static const iosApiKey = 'REPLACE_ME';
@@ -24,6 +25,7 @@ class FirebaseSecrets {
   static const iosProjectId = 'REPLACE_ME';
   static const iosStorageBucket = 'REPLACE_ME';
   static const iosBundleId = 'REPLACE_ME';
+  static const iosDatabaseUrl = 'https://REPLACE_ME-default-rtdb.firebaseio.com';
 
   // Android
   static const androidApiKey = 'REPLACE_ME';
@@ -31,6 +33,7 @@ class FirebaseSecrets {
   static const androidMessagingSenderId = 'REPLACE_ME';
   static const androidProjectId = 'REPLACE_ME';
   static const androidStorageBucket = 'REPLACE_ME';
+  static const androidDatabaseUrl = 'https://REPLACE_ME-default-rtdb.firebaseio.com';
 
   // Windows
   static const windowsApiKey = 'REPLACE_ME';
@@ -40,4 +43,5 @@ class FirebaseSecrets {
   static const windowsAuthDomain = 'REPLACE_ME';
   static const windowsStorageBucket = 'REPLACE_ME';
   static const windowsMeasurementId = 'REPLACE_ME';
+  static const windowsDatabaseUrl = 'https://REPLACE_ME-default-rtdb.firebaseio.com';
 }

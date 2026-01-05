@@ -5,11 +5,14 @@ import 'package:equb/services/gateway_service.dart';
 import 'package:equb/services/system_log_service.dart';
 import 'package:equb/ui/responsive.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
+import 'package:equb/ui/widgets/admin_navigation_rail.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class SuperAdminScreen extends ConsumerStatefulWidget {
-  const SuperAdminScreen({super.key});
+  const SuperAdminScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   ConsumerState<SuperAdminScreen> createState() => _SuperAdminScreenState();
@@ -18,6 +21,7 @@ class SuperAdminScreen extends ConsumerStatefulWidget {
 class _SuperAdminScreenState extends ConsumerState<SuperAdminScreen> {
   final _rulesController = TextEditingController();
   LogLevel? _filter;
+  int _panelIndex = 0;
 
   @override
   void dispose() {
@@ -28,6 +32,88 @@ class _SuperAdminScreenState extends ConsumerState<SuperAdminScreen> {
   @override
   Widget build(BuildContext context) {
     final gatewayService = ref.watch(gatewayServiceProvider);
+
+    final isWide = context.isTablet || context.isDesktop;
+
+    final panels = <_SuperAdminPanelItem>[
+      _SuperAdminPanelItem(
+        label: 'Gateways',
+        icon: Icons.hub_outlined,
+        builder: (_) => _GatewayPanel(gatewayService: gatewayService),
+      ),
+      _SuperAdminPanelItem(
+        label: 'Logs',
+        icon: Icons.list_alt_outlined,
+        builder: (_) => _LogsPanel(
+          filter: _filter,
+          onFilterChanged: (value) => setState(() => _filter = value),
+        ),
+      ),
+      _SuperAdminPanelItem(
+        label: 'Rules',
+        icon: Icons.rule_folder_outlined,
+        builder: (_) => _RulesPanel(controller: _rulesController),
+      ),
+    ];
+
+    Widget buildBody() {
+      if (!isWide) {
+        return SingleChildScrollView(
+          padding: context.pagePadding,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: context.contentMaxWidth),
+              child: Column(
+                children: [
+                  _GatewayPanel(gatewayService: gatewayService),
+                  const SizedBox(height: AppSpacing.lg),
+                  _LogsPanel(
+                    filter: _filter,
+                    onFilterChanged: (value) => setState(() => _filter = value),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  _RulesPanel(controller: _rulesController),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      final safeIndex = _panelIndex.clamp(0, panels.length - 1);
+      final selected = panels[safeIndex];
+
+      return Row(
+        children: [
+          AdminNavigationRail(
+            title: 'Super Admin',
+            selectedIndex: safeIndex,
+            onDestinationSelected: (value) => setState(() => _panelIndex = value),
+            destinations: [
+              for (final panel in panels)
+                AdminRailDestination(label: panel.label, icon: panel.icon),
+            ],
+          ),
+          const VerticalDivider(width: 1),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: context.pagePadding,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: context.contentMaxWidth),
+                  child: selected.builder(context),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    if (widget.embedded) {
+      return SafeArea(child: buildBody());
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Super Admin Command Center'),
@@ -39,45 +125,21 @@ class _SuperAdminScreenState extends ConsumerState<SuperAdminScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isDesktop = constraints.maxWidth >= Breakpoints.desktop;
-            final panel = Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: isDesktop ? 3 : 1,
-                  child: _GatewayPanel(gatewayService: gatewayService),
-                ),
-                if (isDesktop)
-                  const SizedBox(width: AppSpacing.lg)
-                else
-                  const SizedBox(height: AppSpacing.lg),
-                Expanded(
-                  flex: isDesktop ? 4 : 1,
-                  child: _LogsPanel(
-                    filter: _filter,
-                    onFilterChanged: (value) => setState(() => _filter = value),
-                  ),
-                ),
-                if (isDesktop) const SizedBox(width: AppSpacing.lg),
-                Expanded(
-                  flex: isDesktop ? 3 : 1,
-                  child: _RulesPanel(controller: _rulesController),
-                ),
-              ],
-            );
-
-            return SingleChildScrollView(
-              padding: context.pagePadding,
-              child: panel,
-            );
-          },
-        ),
-      ),
+      body: SafeArea(child: buildBody()),
     );
   }
+}
+
+class _SuperAdminPanelItem {
+  const _SuperAdminPanelItem({
+    required this.label,
+    required this.icon,
+    required this.builder,
+  });
+
+  final String label;
+  final IconData icon;
+  final Widget Function(BuildContext) builder;
 }
 
 class _GatewayPanel extends StatelessWidget {

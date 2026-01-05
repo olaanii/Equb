@@ -25,12 +25,23 @@ class NotificationRepository {
   }
 
   Future<void> sendNotification(UserNotification notification) async {
+    final collectionRef = _firestore
+      .collection('users')
+      .doc(notification.userId)
+      .collection('notifications');
+
+    final docRef =
+      notification.id.isEmpty ? collectionRef.doc() : collectionRef.doc(notification.id);
+
+    final payload = notification.toJson();
+    payload['id'] = docRef.id;
+
     await _firestore
         .collection('users')
         .doc(notification.userId)
         .collection('notifications')
-        .doc(notification.id.isEmpty ? null : notification.id)
-        .set(notification.toJson());
+      .doc(docRef.id)
+      .set(payload);
   }
 
   Future<void> markAsRead(String userId, String notificationId) async {

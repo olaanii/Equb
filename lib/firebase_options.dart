@@ -49,6 +49,7 @@ class DefaultFirebaseOptions {
     authDomain: FirebaseSecrets.webAuthDomain,
     storageBucket: FirebaseSecrets.webStorageBucket,
     measurementId: FirebaseSecrets.webMeasurementId,
+    databaseURL: FirebaseSecrets.webDatabaseUrl,
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -58,6 +59,7 @@ class DefaultFirebaseOptions {
     projectId: FirebaseSecrets.iosProjectId,
     storageBucket: FirebaseSecrets.iosStorageBucket,
     iosBundleId: FirebaseSecrets.iosBundleId,
+    databaseURL: FirebaseSecrets.iosDatabaseUrl,
   );
 
   static const FirebaseOptions android = FirebaseOptions(
@@ -66,6 +68,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: FirebaseSecrets.androidMessagingSenderId,
     projectId: FirebaseSecrets.androidProjectId,
     storageBucket: FirebaseSecrets.androidStorageBucket,
+    databaseURL: FirebaseSecrets.androidDatabaseUrl,
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
@@ -76,5 +79,6 @@ class DefaultFirebaseOptions {
     authDomain: FirebaseSecrets.windowsAuthDomain,
     storageBucket: FirebaseSecrets.windowsStorageBucket,
     measurementId: FirebaseSecrets.windowsMeasurementId,
+    databaseURL: FirebaseSecrets.windowsDatabaseUrl,
   );
 }

@@ -88,3 +88,7 @@ flutter_*.log
 
 # Local planning notes
 PROGRESS.md
+
+# Local UI notes
+/docs/equb_ui_notes.md
+/docs/implementation.md

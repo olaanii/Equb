@@ -1,4 +1,5 @@
 import 'package:equb/ui/auth_wrapper.dart';
+import 'package:equb/ui/routes/admin_route.dart';
 import 'package:equb/ui/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -120,6 +121,9 @@ class EqubApp extends ConsumerWidget {
         switch (settings.name) {
           case '/':
             page = const AuthWrapper();
+            break;
+          case '/admin':
+            page = const AdminRoute();
             break;
           default:
             page = const AuthWrapper();
