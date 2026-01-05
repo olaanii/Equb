@@ -92,3 +92,6 @@ PROGRESS.md
 # Local UI notes
 /docs/equb_ui_notes.md
 /docs/implementation.md
+
+# Ignore node modules in functions
+functions/node_modules/
