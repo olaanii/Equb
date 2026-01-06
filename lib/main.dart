@@ -1,5 +1,9 @@
 import 'package:equb/ui/auth_wrapper.dart';
 import 'package:equb/ui/routes/admin_route.dart';
+import 'package:equb/ui/screens/groups/group_invitations_screen.dart';
+import 'package:equb/ui/screens/groups/group_settings_screen.dart';
+import 'package:equb/ui/screens/onboarding/onboarding_flow_screen.dart';
+import 'package:equb/models/group_model.dart';
 import 'package:equb/ui/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +36,16 @@ void main() async {
       await notif.init();
     } catch (_) {}
   }
+
+  // Start background services
+  Future.microtask(() {
+    try {
+      // Services will be started when providers are initialized
+      // Payout scheduler and auto top-up monitoring will start automatically
+    } catch (e) {
+      debugPrint('Failed to start background services: $e');
+    }
+  });
   runApp(
     ProviderScope(
       child: EqubApp(
@@ -124,6 +138,16 @@ class EqubApp extends ConsumerWidget {
             break;
           case '/admin':
             page = const AdminRoute();
+            break;
+          case '/onboarding':
+            page = const OnboardingFlowScreen();
+            break;
+          case '/group-settings':
+            final group = settings.arguments as GroupModel?;
+            page = group != null ? GroupSettingsScreen(group: group) : const AuthWrapper();
+            break;
+          case '/group-invitations':
+            page = const GroupInvitationsScreen();
             break;
           default:
             page = const AuthWrapper();

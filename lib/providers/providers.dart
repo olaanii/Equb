@@ -1,22 +1,32 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:equb/models/auto_topup.dart';
+import 'package:equb/models/chat_message.dart';
 import 'package:equb/models/equb_model.dart';
+import 'package:equb/models/id_document.dart';
 import 'package:equb/models/points_event.dart';
 import 'package:equb/models/user_model.dart';
 import 'package:equb/models/user_notification.dart';
 import 'package:equb/services/analytics_service.dart';
 import 'package:equb/services/auth_service.dart';
+import 'package:equb/services/biometric_auth_service.dart';
+import 'package:equb/services/device_management_service.dart';
 import 'package:equb/services/device_token_registrar.dart';
 import 'package:equb/services/equb_repository.dart';
 import 'package:equb/services/equb_rotation_engine.dart';
 import 'package:equb/services/firebase_auth_service.dart';
 import 'package:equb/services/gateway_service.dart';
+import 'package:equb/services/group_management_service.dart';
 import 'package:equb/services/image_storage_service.dart';
 import 'package:equb/services/memory_equb_repository.dart';
 import 'package:equb/services/notification_reminder_service.dart';
 import 'package:equb/services/notification_service.dart';
+import 'package:equb/services/onboarding_service.dart';
 import 'package:equb/services/payment_service.dart';
 import 'package:equb/services/points_repository.dart';
+import 'package:equb/services/push_notification_scheduler.dart';
 import 'package:equb/services/rtdb_equb_repository.dart';
 import 'package:equb/services/rtdb_notification_repository.dart';
 import 'package:equb/services/rtdb_points_repository.dart';
@@ -24,8 +34,18 @@ import 'package:equb/services/rtdb_reminder_scheduler_service.dart';
 import 'package:equb/services/rtdb_user_repository.dart';
 import 'package:equb/services/rtdb_wallet_repository.dart';
 import 'package:equb/services/secure_storage_service.dart';
+import 'package:equb/services/session_security_service.dart';
 import 'package:equb/services/session_cache_service.dart';
 import 'package:equb/services/system_log_service.dart';
+import 'package:equb/services/chat_service.dart';
+import 'package:equb/services/id_scan_service.dart';
+import 'package:equb/services/id_document_repository.dart';
+import 'package:equb/services/auto_topup_repository.dart';
+import 'package:equb/services/auto_topup_service.dart';
+import 'package:equb/services/payout_scheduler_service.dart';
+import 'package:equb/services/group_analytics_service.dart';
+import 'package:equb/services/email_service.dart';
+import 'package:equb/services/advanced_admin_service.dart';
 import 'package:equb/services/user_repository.dart';
 import 'package:equb/services/wallet_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -233,8 +253,11 @@ final equbStoreProvider = Provider<EqubStore>((ref) {
   return EqubStore(seed: seed);
 });
 
-final equbRotationEngineProvider = Provider<EqubRotationEngine>((ref) {
-  return EqubRotationEngine();
+final Provider<EqubRotationEngine> equbRotationEngineProvider = Provider<EqubRotationEngine>((ref) {
+  final engine = EqubRotationEngine();
+  final payoutScheduler = ref.watch(payoutSchedulerServiceProvider);
+  engine.setPayoutScheduler(payoutScheduler);
+  return engine;
 });
 
 final equbRepositoryProvider = Provider<EqubRepository>((ref) {
@@ -519,4 +542,208 @@ final pointsLedgerProvider = StreamProvider<List<PointsEvent>>((ref) {
 
   final repo = ref.watch(pointsRepositoryProvider);
   return repo.watchPointsLedger(user.id);
+});
+
+final chatServiceProvider = Provider<ChatService>((ref) {
+  final logService = ref.watch(systemLogServiceProvider);
+  if (Firebase.apps.isEmpty) {
+    throw UnimplementedError('Firebase not initialized; chat is unavailable.');
+  }
+
+  final service = ChatService(
+    database: FirebaseDatabase.instance,
+    logService: logService,
+  );
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+final groupChatMessagesProvider = StreamProvider.family<List<ChatMessage>, String>((ref, groupId) async* {
+  final chatService = ref.watch(chatServiceProvider);
+
+  final history = await chatService.getChatHistory(groupId);
+  final allMessages = List<ChatMessage>.from(history);
+  allMessages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+  yield List<ChatMessage>.unmodifiable(allMessages);
+
+  await for (final newMessage in chatService.watchMessages(groupId)) {
+    if (!allMessages.any((msg) => msg.id == newMessage.id)) {
+      allMessages.add(newMessage);
+      allMessages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      yield List<ChatMessage>.unmodifiable(allMessages);
+    }
+  }
+});
+
+final groupTypingStatusProvider = StreamProvider.family<Map<String, String>, String>((
+  ref,
+  groupId,
+) {
+  final chatService = ref.watch(chatServiceProvider);
+  return chatService.watchTypingStatus(groupId);
+});
+
+final idScanServiceProvider = Provider<IdScanService>((ref) {
+  final logService = ref.watch(systemLogServiceProvider);
+  final service = IdScanService(logService: logService);
+  ref.onDispose(service.dispose);
+  return service;
+});
+
+final idDocumentRepositoryProvider = Provider<IdDocumentRepository>((ref) {
+  final logService = ref.watch(systemLogServiceProvider);
+  if (Firebase.apps.isEmpty) {
+    throw UnimplementedError('Firebase not initialized; ID document repository is unavailable.');
+  }
+
+  return IdDocumentRepository(
+    database: FirebaseDatabase.instance,
+    logService: logService,
+  );
+});
+
+final userIdDocumentsProvider = StreamProvider<List<IdDocument>>((ref) {
+  final user = ref.watch(currentUserProvider).value;
+  if (user == null) return const Stream.empty();
+
+  final repo = ref.watch(idDocumentRepositoryProvider);
+  return repo.watchUserDocuments(user.id);
+});
+
+final pendingIdDocumentsProvider = StreamProvider<List<IdDocument>>((ref) {
+  final repo = ref.watch(idDocumentRepositoryProvider);
+  return repo.watchPendingDocuments();
+});
+
+final autoTopupRepositoryProvider = Provider<AutoTopupRepository>((ref) {
+  final logService = ref.watch(systemLogServiceProvider);
+  if (Firebase.apps.isEmpty) {
+    throw UnimplementedError('Firebase not initialized; auto top-up is unavailable.');
+  }
+
+  return AutoTopupRepository(
+    database: FirebaseDatabase.instance,
+    logService: logService,
+  );
+});
+
+final autoTopupServiceProvider = Provider<AutoTopupService>((ref) {
+  final repository = ref.watch(autoTopupRepositoryProvider);
+  final walletRepo = ref.watch(walletRepositoryProvider);
+  final gatewayService = ref.watch(gatewayServiceProvider);
+  final logService = ref.watch(systemLogServiceProvider);
+
+  final service = AutoTopupService(
+    repository: repository,
+    walletRepository: walletRepo,
+    gatewayService: gatewayService,
+    logService: logService,
+  );
+
+  ref.onDispose(service.stopBalanceMonitoring);
+  return service;
+});
+
+final userAutoTopupRulesProvider = StreamProvider<List<AutoTopupRule>>((ref) {
+  final user = ref.watch(currentUserProvider).value;
+  if (user == null) return const Stream.empty();
+
+  final repository = ref.watch(autoTopupRepositoryProvider);
+  return repository.watchUserRules(user.id);
+});
+
+final userAutoTopupHistoryProvider = StreamProvider<List<AutoTopupExecution>>((ref) {
+  final user = ref.watch(currentUserProvider).value;
+  if (user == null) return const Stream.empty();
+
+  final repository = ref.watch(autoTopupRepositoryProvider);
+  return repository.watchExecutionHistory(user.id);
+});
+
+final payoutSchedulerServiceProvider = Provider<PayoutSchedulerService>((ref) {
+  final equbRepo = ref.watch(equbRepositoryProvider);
+  final walletRepo = ref.watch(walletRepositoryProvider);
+  final logService = ref.watch(systemLogServiceProvider);
+
+  final service = PayoutSchedulerService(
+    equbRepository: equbRepo,
+    walletRepository: walletRepo,
+    logService: logService,
+  );
+
+  // Start the scheduler automatically
+  service.startScheduler();
+
+  ref.onDispose(service.stopScheduler);
+  return service;
+});
+
+final groupAnalyticsServiceProvider = Provider<GroupAnalyticsService>((ref) {
+  final equbRepo = ref.watch(equbRepositoryProvider);
+  final logService = ref.watch(systemLogServiceProvider);
+
+  return GroupAnalyticsService(
+    equbRepository: equbRepo,
+    logService: logService,
+  );
+});
+
+final emailServiceProvider = Provider<EmailService>((ref) {
+  return EmailService(
+    functions: FirebaseFunctions.instance,
+    logService: ref.watch(systemLogServiceProvider),
+  );
+});
+
+final advancedAdminServiceProvider = Provider<AdvancedAdminService>((ref) {
+  return AdvancedAdminService(
+    functions: FirebaseFunctions.instance,
+    equbRepository: ref.watch(equbRepositoryProvider),
+    userRepository: ref.watch(userRepositoryProvider),
+    idDocumentRepository: ref.watch(idDocumentRepositoryProvider),
+    logService: ref.watch(systemLogServiceProvider),
+  );
+});
+
+final onboardingServiceProvider = Provider<OnboardingService>((ref) {
+  return OnboardingService(
+    firestore: FirebaseFirestore.instance,
+    logService: ref.watch(systemLogServiceProvider),
+  );
+});
+
+final pushNotificationSchedulerProvider = Provider<PushNotificationScheduler>((ref) {
+  return PushNotificationScheduler(
+    firestore: FirebaseFirestore.instance,
+    functions: FirebaseFunctions.instance,
+    logService: ref.watch(systemLogServiceProvider),
+  );
+});
+
+final groupManagementServiceProvider = Provider<GroupManagementService>((ref) {
+  return GroupManagementService(
+    firestore: FirebaseFirestore.instance,
+    logService: ref.watch(systemLogServiceProvider),
+  );
+});
+
+final biometricAuthServiceProvider = Provider<BiometricAuthService>((ref) {
+  return BiometricAuthService(
+    logService: ref.watch(systemLogServiceProvider),
+  );
+});
+
+final deviceManagementServiceProvider = Provider<DeviceManagementService>((ref) {
+  return DeviceManagementService(
+    firestore: FirebaseFirestore.instance,
+    logService: ref.watch(systemLogServiceProvider),
+  );
+});
+
+final sessionSecurityServiceProvider = Provider<SessionSecurityService>((ref) {
+  return SessionSecurityService(
+    firestore: FirebaseFirestore.instance,
+    deviceService: ref.watch(deviceManagementServiceProvider),
+    logService: ref.watch(systemLogServiceProvider),
+  );
 });

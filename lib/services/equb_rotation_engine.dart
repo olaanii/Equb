@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:equb/models/equb_model.dart';
+import 'package:equb/services/payout_scheduler_service.dart';
 
 class RotationUpdate {
   const RotationUpdate({
@@ -24,6 +25,12 @@ class _RecipientSelection {
 }
 
 class EqubRotationEngine {
+  PayoutSchedulerService? _payoutScheduler;
+
+  void setPayoutScheduler(PayoutSchedulerService scheduler) {
+    _payoutScheduler = scheduler;
+  }
+
   EqubRotationState bootstrapState({
     required EqubScheduleConfig config,
     required List<String> members,
@@ -128,6 +135,22 @@ class EqubRotationEngine {
     final recipient = selection.recipient;
     final payoutAmount = required * members.length;
     final timestamp = (now ?? DateTime.now()).toUtc();
+
+    // Instead of creating the record directly, trigger the payout scheduler
+    if (_payoutScheduler != null) {
+      // Schedule the payout using the payout scheduler service
+      // This will handle winner selection, fund distribution, and execution
+      Future.microtask(() async {
+        try {
+          await _payoutScheduler!.triggerManualPayout(group.id);
+        } catch (e) {
+          // Log error but don't block the contribution registration
+          print('Failed to trigger payout for group ${group.id}: $e');
+        }
+      });
+    }
+
+    // For now, create a placeholder record until the payout scheduler processes it
     final record = EqubPayoutRecord(
       round: nextRound,
       memberId: recipient,
@@ -135,7 +158,9 @@ class EqubRotationEngine {
       scheduledFor: syncedState.nextPayoutDate,
       processedAt: timestamp,
       autoAssigned: true,
+      note: 'Payout scheduled via scheduler service',
     );
+
     final history = [...syncedState.history, record];
     final adjustedProgress = <String, double>{
       for (final member in members)

@@ -601,6 +601,295 @@ exports.superAdminSetGatewaySecret = functions.https.onCall(async (data, context
   return { ok: true };
 });
 
+// --- Advanced Admin Functions ---
+
+const {
+  getAdminDashboardStats,
+  getAdminAuditLogs,
+  logAdminAction,
+  performSystemMaintenance,
+  generateComplianceReport,
+} = require('./advanced_admin');
+
+const {
+  telebirrWebhook,
+  cbeBirrWebhook,
+  checkMobileMoneyTransaction,
+  processPendingMobileMoneyTransactions,
+} = require('./mobile_money_webhooks');
+
+const {
+  schedulePushNotification,
+  sendImmediateNotification,
+  cancelScheduledNotifications,
+  sendScheduledNotifications,
+  scheduleContributionReminders,
+  schedulePayoutNotifications,
+} = require('./push_notifications');
+
+// --- Email Notifications ---
+
+const { EmailService } = require('./email_service');
+const emailService = new EmailService();
+
+// Send welcome email when user is created
+exports.sendWelcomeEmail = functions.database.ref('users/{userId}')
+  .onCreate(async (snapshot, context) => {
+    const userId = context.params.userId;
+    const userData = snapshot.val();
+
+    if (!userData || !userData.email) {
+      console.log('No email found for user:', userId);
+      return;
+    }
+
+    try {
+      await emailService.sendWelcomeEmail(
+        userData.email,
+        userData.name || 'User'
+      );
+      console.log('Welcome email sent to:', userData.email);
+    } catch (error) {
+      console.error('Failed to send welcome email:', error);
+    }
+  });
+
+// Send contribution reminder emails
+exports.scheduleContributionReminders = functions.pubsub
+  .schedule('every 24 hours')
+  .onRun(async (context) => {
+    const db = admin.database();
+    const now = new Date();
+    const reminderDate = new Date(now.getTime() + (24 * 60 * 60 * 1000)); // 24 hours from now
+
+    try {
+      // Get all groups with upcoming contribution dates
+      const groupsSnapshot = await db.ref('groups').get();
+      if (!groupsSnapshot.exists()) return;
+
+      const groups = groupsSnapshot.val();
+
+      for (const [groupId, groupData] of Object.entries(groups)) {
+        if (!groupData.nextPayoutDate) continue;
+
+        const nextPayout = new Date(groupData.nextPayoutDate);
+        const timeDiff = nextPayout.getTime() - reminderDate.getTime();
+
+        // If next payout is within 24 hours, send reminders
+        if (timeDiff > 0 && timeDiff <= (24 * 60 * 60 * 1000)) {
+          await sendGroupContributionReminders(db, groupId, groupData);
+        }
+      }
+
+      console.log('Contribution reminders processed');
+    } catch (error) {
+      console.error('Failed to process contribution reminders:', error);
+    }
+  });
+
+// Send payout notification emails
+exports.sendPayoutNotification = functions.database
+  .ref('auto_topup_executions/{executionId}')
+  .onCreate(async (snapshot, context) => {
+    const executionData = snapshot.val();
+    if (!executionData || executionData.status !== 'success') return;
+
+    // This is for auto top-up success - you might want different logic for actual payouts
+    // For now, this serves as an example of how to trigger email notifications
+    console.log('Auto top-up successful, could send notification:', executionData);
+  });
+
+// Manual email sending function for admins
+exports.adminSendEmail = functions.https.onCall(async (data, context) => {
+  const callerUid = assertAuthed(context);
+  const db = admin.database();
+  await assertAdminUid(db, callerUid);
+
+  const to = (data && data.to ? String(data.to) : '').trim();
+  const subject = (data && data.subject ? String(data.subject) : '').trim();
+  const html = (data && data.html ? String(data.html) : '').trim();
+  const text = (data && data.text ? String(data.text) : '').trim();
+
+  if (!to || !subject || (!html && !text)) {
+    throw new functions.https.HttpsError('invalid-argument', 'to, subject, and html/text required.');
+  }
+
+  try {
+    const result = await emailService.sendEmail(to, subject, html, text);
+    return { ok: true, result };
+  } catch (error) {
+    console.error('Failed to send email:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to send email');
+  }
+});
+
+// --- User Email Preferences Management ---
+
+exports.getUserEmailPreferences = functions.https.onCall(async (data, context) => {
+  const callerUid = assertAuthed(context);
+  const targetUserId = (data && data.userId ? String(data.userId) : '').trim();
+
+  if (!targetUserId) {
+    throw new functions.https.HttpsError('invalid-argument', 'userId required.');
+  }
+
+  // Users can only get their own preferences, admins can get any user's
+  const db = admin.database();
+  const isAdmin = (await db.ref(`admins/${callerUid}`).get()).exists();
+  const isSuperAdmin = (await db.ref(`superadmins/${callerUid}`).get()).exists();
+
+  if (callerUid !== targetUserId && !isAdmin && !isSuperAdmin) {
+    throw new functions.https.HttpsError('permission-denied', 'Can only access your own email preferences.');
+  }
+
+  try {
+    const prefsSnapshot = await db.ref(`user_email_preferences/${targetUserId}`).get();
+    const preferences = prefsSnapshot.exists()
+      ? prefsSnapshot.val()
+      : {}; // Return empty object for defaults
+
+    return { success: true, preferences };
+  } catch (error) {
+    console.error('Failed to get email preferences:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get email preferences');
+  }
+});
+
+exports.updateUserEmailPreferences = functions.https.onCall(async (data, context) => {
+  const callerUid = assertAuthed(context);
+  const targetUserId = (data && data.userId ? String(data.userId) : '').trim();
+  const preferences = data && data.preferences;
+
+  if (!targetUserId || !isPlainObject(preferences)) {
+    throw new functions.https.HttpsError('invalid-argument', 'userId and preferences required.');
+  }
+
+  // Users can only update their own preferences, admins can update any user's
+  const db = admin.database();
+  const isAdmin = (await db.ref(`admins/${callerUid}`).get()).exists();
+  const isSuperAdmin = (await db.ref(`superadmins/${callerUid}`).get()).exists();
+
+  if (callerUid !== targetUserId && !isAdmin && !isSuperAdmin) {
+    throw new functions.https.HttpsError('permission-denied', 'Can only update your own email preferences.');
+  }
+
+  try {
+    // Validate preferences structure
+    const validKeys = [
+      'contributionReminders', 'payoutNotifications', 'groupInvitations',
+      'transactionConfirmations', 'weeklySummaries', 'marketingEmails',
+      'lowBalanceWarnings', 'systemUpdates'
+    ];
+
+    const sanitizedPrefs = {};
+    for (const key of validKeys) {
+      if (preferences[key] !== undefined) {
+        sanitizedPrefs[key] = preferences[key];
+      }
+    }
+
+    await db.ref(`user_email_preferences/${targetUserId}`).set({
+      ...sanitizedPrefs,
+      updatedAt: admin.database.ServerValue.TIMESTAMP,
+      updatedBy: callerUid,
+    });
+
+    console.log('Email preferences updated for user:', targetUserId);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to update email preferences:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to update email preferences');
+  }
+});
+
+exports.getUserEmailHistory = functions.https.onCall(async (data, context) => {
+  const callerUid = assertAuthed(context);
+  const targetUserId = (data && data.userId ? String(data.userId) : '').trim();
+  const limit = Math.max(1, Math.min(100, Number((data && data.limit) || 50)));
+
+  if (!targetUserId) {
+    throw new functions.https.HttpsError('invalid-argument', 'userId required.');
+  }
+
+  // Users can only get their own history, admins can get any user's
+  const db = admin.database();
+  const isAdmin = (await db.ref(`admins/${callerUid}`).get()).exists();
+  const isSuperAdmin = (await db.ref(`superadmins/${callerUid}`).get()).exists();
+
+  if (callerUid !== targetUserId && !isAdmin && !isSuperAdmin) {
+    throw new functions.https.HttpsError('permission-denied', 'Can only access your own email history.');
+  }
+
+  try {
+    const historySnapshot = await db.ref('email_notifications')
+      .orderByChild('userId')
+      .equalTo(targetUserId)
+      .limitToLast(limit)
+      .get();
+
+    const emails = [];
+    if (historySnapshot.exists()) {
+      const rawData = historySnapshot.val();
+      for (const [id, emailData] of Object.entries(rawData)) {
+        emails.push({ id, ...emailData });
+      }
+      emails.sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
+    }
+
+    return { success: true, emails };
+  } catch (error) {
+    console.error('Failed to get email history:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to get email history');
+  }
+});
+
+// Helper function to send contribution reminders for a group
+async function sendGroupContributionReminders(db, groupId, groupData) {
+  if (!groupData.members || !Array.isArray(groupData.members)) return;
+
+  for (const memberId of groupData.members) {
+    try {
+      // Get user data
+      const userSnapshot = await db.ref(`users/${memberId}`).get();
+      if (!userSnapshot.exists()) continue;
+
+      const userData = userSnapshot.val();
+      if (!userData.email) continue;
+
+      // Check email preferences
+      const prefsSnapshot = await db.ref(`user_email_preferences/${memberId}`).get();
+      const prefs = prefsSnapshot.exists() ? prefsSnapshot.val() : {};
+      const reminderPref = prefs.contributionReminders || 'immediate';
+
+      if (reminderPref === 'never') continue;
+
+      // Get user's contribution status (simplified)
+      const contributionAmount = groupData.contributionAmount || 0;
+      const nextPayoutDate = groupData.nextPayoutDate;
+
+      await emailService.sendContributionReminder(
+        userData.email,
+        userData.name || 'User',
+        groupData.name || 'Savings Group',
+        contributionAmount,
+        new Date(nextPayoutDate).toLocaleDateString()
+      );
+
+      console.log('Contribution reminder sent to:', userData.email);
+    } catch (error) {
+      console.error('Failed to send contribution reminder to member:', memberId, error);
+    }
+  }
+}
+
+// --- Advanced Admin Functions ---
+
+exports.getAdminDashboardStats = getAdminDashboardStats;
+exports.getAdminAuditLogs = getAdminAuditLogs;
+exports.logAdminAction = logAdminAction;
+exports.performSystemMaintenance = performSystemMaintenance;
+exports.generateComplianceReport = generateComplianceReport;
+
 // --- Groups management (admin) ---
 
 exports.adminListGroups = functions.https.onCall(async (data, context) => {
@@ -804,3 +1093,19 @@ exports.adminDeleteGroup = functions.https.onCall(async (data, context) => {
   await db.ref(`groups/${groupId}`).remove();
   return { ok: true };
 });
+
+// --- Mobile Money Webhooks ---
+
+exports.telebirrWebhook = telebirrWebhook;
+exports.cbeBirrWebhook = cbeBirrWebhook;
+exports.checkMobileMoneyTransaction = checkMobileMoneyTransaction;
+exports.processPendingMobileMoneyTransactions = processPendingMobileMoneyTransactions;
+
+// --- Push Notifications ---
+
+exports.schedulePushNotification = schedulePushNotification;
+exports.sendImmediateNotification = sendImmediateNotification;
+exports.cancelScheduledNotifications = cancelScheduledNotifications;
+exports.sendScheduledNotifications = sendScheduledNotifications;
+exports.scheduleContributionReminders = scheduleContributionReminders;
+exports.schedulePayoutNotifications = schedulePayoutNotifications;

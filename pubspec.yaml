@@ -55,6 +55,11 @@ dependencies:
   image_picker: ^1.1.2
   shared_preferences: ^2.3.2
 
+  # Camera & OCR
+  camera: ^0.10.5+9
+  google_ml_kit: ^0.18.0
+  image_cropper: ^8.1.0
+
   # For CSV / PDF exports (stubs)
   csv: ^6.0.0
   pdf: ^3.10.1
@@ -67,7 +72,9 @@ dependencies:
   # firebase_auth: ^6.1.0
   # firebase_messaging: ^16.0.2
   crypto: ^3.0.2
+  pointycastle: ^3.7.3
   jose: ^0.3.5
+  device_info_plus: ^9.0.2
   webview_flutter: ^4.8.0
   meta: ^1.14.0
 

@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-enum LogLevel { info, warning, error }
+enum LogLevel { debug, info, warning, error, critical }
 
 class SystemLogEntry {
   final DateTime timestamp;

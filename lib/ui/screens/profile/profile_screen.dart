@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:equb/services/toast_service.dart';
 import 'package:equb/ui/screens/notifications/notifications_screen.dart';
 import 'account_security_screen.dart';
+import 'email_preferences_screen.dart';
 import 'support_compliance_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -489,6 +490,17 @@ class ProfileScreen extends ConsumerWidget {
           onTap:
               () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+              ),
+        ),
+        const SizedBox(height: 12),
+        _buildMenuOption(
+          context,
+          theme,
+          icon: Icons.email_outlined,
+          title: 'Email Preferences',
+          onTap:
+              () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const EmailPreferencesScreen()),
               ),
         ),
         const SizedBox(height: 12),

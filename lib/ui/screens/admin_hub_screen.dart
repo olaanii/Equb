@@ -8,6 +8,7 @@ import 'package:equb/ui/screens/admin_screen.dart';
 import 'package:equb/ui/screens/gateways_screen.dart';
 import 'package:equb/ui/screens/transactions/tx_history_screen.dart';
 import 'package:equb/ui/screens/super_admin_screen.dart';
+import 'package:equb/ui/screens/admin/advanced_admin_dashboard.dart';
 import 'package:equb/providers/providers.dart';
 import 'package:equb/models/user_model.dart';
 
@@ -47,6 +48,13 @@ class _AdminHubScreenState extends ConsumerState<AdminHubScreen> {
         icon: Icons.receipt_long_outlined,
         builder: (_) => const TxHistoryScreen(embedded: true),
       ),
+      if (isSuperAdmin)
+        _AdminNavItem(
+          title: 'Advanced Admin',
+          subtitle: 'Bulk operations, audit logs, and compliance',
+          icon: Icons.admin_panel_settings,
+          builder: (_) => const AdvancedAdminDashboard(),
+        ),
       if (isSuperAdmin)
         _AdminNavItem(
           title: 'Super Admin',

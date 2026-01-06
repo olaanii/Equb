@@ -1,11 +1,10 @@
 import 'dart:async';
 
 import 'package:equb/providers/providers.dart';
-import 'package:equb/providers/app_providers.dart';
 import 'package:equb/models/user_model.dart';
 import 'package:equb/ui/home_shell.dart';
 import 'package:equb/ui/screens/auth/login_screen.dart';
-import 'package:equb/ui/screens/onboarding/onboarding_screen.dart';
+import 'package:equb/ui/screens/onboarding/onboarding_flow_screen.dart';
 import 'package:equb/services/system_log_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -40,81 +39,88 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
       }
     });
 
-    // 1. Check Firebase Auth State first. If user is logged in, skip onboarding
-    // and do not block navigation on profile/RTDB availability.
+    // 1. Check Firebase Auth State first
     final firebaseAuthState = ref.watch(firebaseAuthUserProvider);
-    final firebaseUser = firebaseAuthState.asData?.value;
-    if (firebaseUser != null) {
-      return const HomeShell();
-    }
 
-    // 2. Check Onboarding Status
-    final onboardingAsync = ref.watch(onboardingStatusProvider);
-    final analytics = ref.read(analyticsServiceProvider);
-    final logService = ref.read(systemLogServiceProvider);
-
-    return onboardingAsync.when(
-      data: (hasSeenOnboarding) {
-        if (!hasSeenOnboarding) {
-          return const OnboardingScreen();
+    return firebaseAuthState.when(
+      data: (user) {
+        if (user == null) {
+          return const LoginScreen();
         }
 
-        // 3. Render Auth State (Login or Loading/Error)
-        return firebaseAuthState.when(
-          data: (user) {
-            if (user != null) return const HomeShell();
-            return const LoginScreen();
-          },
-          loading: () => const _AuthLoadingState(),
-          error: (err, stack) {
-            final errorProps = <String, dynamic>{
-              'errorType': err.runtimeType.toString(),
-              'message': '$err',
-              'stackTrace': stack.toString(),
-            };
+        final onboardingService = ref.read(onboardingServiceProvider);
+        return FutureBuilder<bool>(
+          future: onboardingService.needsOnboarding(user.uid),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) {
+              return const _AuthLoadingState();
+            }
 
-            return _AuthErrorState(
-              error: err,
-              onRetry: () {
-                logService.log(
-                  LogLevel.info,
-                  'AuthWrapper',
-                  'User tapped retry from auth error state',
-                  context: errorProps,
-                );
-                unawaited(
-                  analytics.track('auth_session_retry', properties: errorProps),
-                );
-                ref.invalidate(firebaseAuthUserProvider);
-              },
-              onOpenLogin: () {
-                logService.log(
-                  LogLevel.info,
-                  'AuthWrapper',
-                  'User opened login from auth error state',
-                  context: errorProps,
-                );
-                unawaited(
-                  analytics.track(
-                    'auth_session_open_login',
-                    properties: errorProps,
-                  ),
-                );
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
-              },
-            );
+            if (snapshot.hasError) {
+              return _AuthErrorState(
+                error: snapshot.error ?? 'Unknown error',
+                onRetry: () {
+                  ref.invalidate(firebaseAuthUserProvider);
+                },
+                onOpenLogin: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  );
+                },
+              );
+            }
+
+            final needsOnboarding = snapshot.data ?? true;
+            return needsOnboarding
+                ? const OnboardingFlowScreen()
+                : const HomeShell();
           },
         );
       },
       loading: () => const _AuthLoadingState(),
-      error:
-          (err, stack) => _AuthErrorState(
-            error: err,
-            onRetry: () => ref.refresh(onboardingStatusProvider),
-            onOpenLogin: () {},
-          ),
+      error: (err, stack) {
+        final errorProps = <String, dynamic>{
+          'errorType': err.runtimeType.toString(),
+          'message': '$err',
+          'stackTrace': stack.toString(),
+        };
+
+        final analytics = ref.read(analyticsServiceProvider);
+        final logService = ref.read(systemLogServiceProvider);
+
+        return _AuthErrorState(
+          error: err,
+          onRetry: () {
+            logService.log(
+              LogLevel.info,
+              'AuthWrapper',
+              'User tapped retry from auth error state',
+              context: errorProps,
+            );
+            unawaited(
+              analytics.track('auth_session_retry', properties: errorProps),
+            );
+            ref.invalidate(firebaseAuthUserProvider);
+          },
+          onOpenLogin: () {
+            logService.log(
+              LogLevel.info,
+              'AuthWrapper',
+              'User opened login from auth error state',
+              context: errorProps,
+            );
+            unawaited(
+              analytics.track(
+                'auth_session_open_login',
+                properties: errorProps,
+              ),
+            );
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+          },
+        );
+      },
     );
   }
 }

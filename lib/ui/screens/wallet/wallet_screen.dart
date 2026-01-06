@@ -10,6 +10,8 @@ import 'package:equb/ui/widgets/common.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'auto_topup_setup_sheet.dart';
+
 class WalletScreen extends ConsumerWidget {
   const WalletScreen({super.key});
 
@@ -666,87 +668,28 @@ class WalletScreen extends ConsumerWidget {
     );
   }
 
-  void _showAutoTopUpSheet(BuildContext context, WidgetRef ref) {
+  void _showAutoTopUpSheet(BuildContext context, WidgetRef ref) async {
+    final user = ref.read(currentUserProvider).value;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please sign in to set up auto top-up')),
+      );
+      return;
+    }
+
+    // Get existing rules
+    final autoTopupService = ref.read(autoTopupServiceProvider);
+    final existingRules = await autoTopupService.getUserRules(user.id);
+    final existingRule = existingRules.isNotEmpty ? existingRules.first : null;
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      builder: (context) {
-        bool enabled = true;
-        String cadence = 'Weekly';
-        final amountController = TextEditingController(text: '750');
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Padding(
-              padding: MediaQuery.of(
-                context,
-              ).viewInsets.add(const EdgeInsets.all(24)),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Auto top-up plan',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 12),
-                  SwitchListTile.adaptive(
-                    value: enabled,
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Enable auto top-up'),
-                    onChanged: (value) => setState(() => enabled = value),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: amountController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Amount per cycle (ETB)',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: cadence,
-                    decoration: const InputDecoration(labelText: 'Frequency'),
-                    items: const [
-                      DropdownMenuItem(value: 'Weekly', child: Text('Weekly')),
-                      DropdownMenuItem(
-                        value: 'Bi-weekly',
-                        child: Text('Bi-weekly'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'Monthly',
-                        child: Text('Monthly'),
-                      ),
-                    ],
-                    onChanged:
-                        (value) => setState(() => cadence = value ?? cadence),
-                  ),
-                  const SizedBox(height: 16),
-                  PrimaryButton(
-                    text: 'Save preferences',
-                    icon: Icons.save_outlined,
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            enabled
-                                ? 'Auto top-up of ETB ${amountController.text} scheduled $cadence.'
-                                : 'Auto top-up disabled.',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                ],
-              ),
-            );
-          },
-        );
-      },
+      builder: (context) => AutoTopupSetupSheet(
+        existingRule: existingRule,
+        userId: user.id,
+        autoTopupService: autoTopupService,
+      ),
     );
   }
 

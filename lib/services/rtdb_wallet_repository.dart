@@ -236,7 +236,7 @@ class RtdbWalletRepository implements WalletRepository {
       type.toString().split('.').last;
 
   @override
-  Future<void> deposit(
+  Future<TransactionModel> deposit(
     String userId,
     double amount,
     String gateway, {
@@ -379,6 +379,8 @@ class RtdbWalletRepository implements WalletRepository {
           );
         }
       }
+
+      return tx;
     } catch (e) {
       _logService?.log(
         LogLevel.error,
@@ -388,6 +390,31 @@ class RtdbWalletRepository implements WalletRepository {
       );
       if (e is RepositoryException) rethrow;
       throw RepositoryException(code: 'deposit-failed', message: 'Deposit failed', cause: e);
+    }
+  }
+
+  @override
+  Future<WalletSummary> getWalletSummary(String userId) async {
+    try {
+      final snapshot = await _userRef(userId).get();
+      if (!snapshot.exists || snapshot.value == null) {
+        return const WalletSummary(available: 0);
+      }
+      final raw = snapshot.value;
+      if (raw is Map) {
+        final data = Map<String, dynamic>.from(raw);
+        final balance = (data['walletBalance'] as num?)?.toDouble() ?? 0.0;
+        return WalletSummary(available: balance);
+      }
+      return const WalletSummary(available: 0);
+    } catch (e) {
+      _logService?.log(
+        LogLevel.warning,
+        'RtdbWalletRepository.getWalletSummary',
+        'Failed to load wallet summary',
+        context: {'userId': userId, 'error': e.toString()},
+      );
+      return const WalletSummary(available: 0);
     }
   }
 

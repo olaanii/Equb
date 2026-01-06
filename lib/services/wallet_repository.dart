@@ -7,16 +7,24 @@ import 'package:equb/services/analytics_service.dart';
 import 'package:equb/utils/money_mathematics.dart';
 
 abstract class WalletRepository {
-  Future<void> deposit(
+  Future<TransactionModel> deposit(
     String userId,
     double amount,
     String gateway, {
     String? screenshotUrl,
   });
+
+  Future<WalletSummary> getWalletSummary(String userId);
   Future<void> withdraw(String userId, double amount, String destination);
   Future<List<TransactionModel>> getTransactions(String userId);
   Stream<List<TransactionModel>> getTransactionStream(String userId);
   Stream<UserModel> getUserStream(String userId);
+}
+
+class WalletSummary {
+  const WalletSummary({required this.available});
+
+  final double available;
 }
 
 class FirestoreWalletRepository implements WalletRepository {
@@ -33,13 +41,13 @@ class FirestoreWalletRepository implements WalletRepository {
        _analyticsService = analyticsService;
 
   @override
-  Future<void> deposit(
+  Future<TransactionModel> deposit(
     String userId,
     double amount,
     String gateway, {
     String? screenshotUrl,
   }) {
-    return _guard(
+    return _guard<TransactionModel>(
       'deposit',
       () async {
         final fee = MoneyMathematics.calculateFee(amount);
@@ -97,10 +105,20 @@ class FirestoreWalletRepository implements WalletRepository {
           gateway: gateway,
           transactionId: tx.id,
         );
+        return tx;
       },
       context: {'userId': userId, 'gateway': gateway, 'amount': amount},
       friendlyMessage: 'Unable to deposit at this time',
     );
+  }
+
+  @override
+  Future<WalletSummary> getWalletSummary(String userId) {
+    return _guard('getWalletSummary', () async {
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final balance = (userDoc.data()?['walletBalance'] as num?)?.toDouble() ?? 0.0;
+      return WalletSummary(available: balance);
+    }, context: {'userId': userId});
   }
 
   @override

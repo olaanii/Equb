@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/group.dart';
 import 'group_chat_screen.dart';
+import 'groups/group_analytics_screen.dart';
 
 class GroupDetailScreen extends ConsumerWidget {
   final Group group;
@@ -70,13 +71,16 @@ class GroupDetailScreen extends ConsumerWidget {
     WidgetRef ref,
     UserModel? user,
   ) {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: PrimaryButton(
-            text: 'Pay with Telebirr',
-            icon: Icons.payment,
-            onPressed: () async {
+        // Payment and Analytics buttons
+        Row(
+          children: [
+            Expanded(
+              child: PrimaryButton(
+                text: 'Pay with Telebirr',
+                icon: Icons.payment,
+                onPressed: () async {
               final messenger = ScaffoldMessenger.of(context);
               try {
                 final gatewayService = ref.read(gatewayServiceProvider);
@@ -171,8 +175,24 @@ class GroupDetailScreen extends ConsumerWidget {
           ),
         ),
       ],
-    );
-  }
+    ),
+    const SizedBox(height: 16),
+    SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(backgroundColor: AppColors.surface),
+        icon: const Icon(Icons.analytics_outlined),
+        label: const Text('View Analytics'),
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => GroupAnalyticsScreen(groupId: group.id),
+          ),
+        ),
+      ),
+    ),
+  ],
+);
+}
 
   Widget _buildMemberList(BuildContext context) {
     return InfoCard(

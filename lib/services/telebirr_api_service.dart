@@ -1,482 +1,193 @@
-import 'dart:async';
 import 'dart:convert';
-
+import 'dart:typed_data';
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
-import 'package:jose/jose.dart';
-
-/// Error wrapper used when Telebirr API responses are not successful.
-class TelebirrApiException implements Exception {
-  TelebirrApiException(this.message, {this.statusCode, this.responseBody});
-
-  final String message;
-  final int? statusCode;
-  final String? responseBody;
-
-  @override
-  String toString() {
-    final code = statusCode != null ? ' (statusCode: $statusCode)' : '';
-    return 'TelebirrApiException: $message$code';
-  }
-}
+import 'package:intl/intl.dart';
+import 'package:pointycastle/export.dart';
 
 class TelebirrApiService {
   TelebirrApiService({
     required this.baseUrl,
     required this.apiKey,
-    String? privateKeyPem,
-    http.Client? httpClient,
-    Duration requestTimeout = const Duration(seconds: 12),
-    String? authUrl,
-    String? authClientId,
-    String? authClientSecret,
-    Map<String, String>? authHeaders,
-    Map<String, dynamic>? authPayloadOverrides,
-    String? authGrantType,
-    String? tokenFieldOverride,
-    String? expiresInFieldOverride,
-    String? expiresAtFieldOverride,
-    Duration tokenClockSkew = const Duration(seconds: 30),
-    bool includeApiKeyInAuth = true,
-  }) : _client = httpClient ?? http.Client(),
-       _requestTimeout = requestTimeout,
-       _signingKey = JsonWebKey.fromPem(
-         (privateKeyPem == null || privateKeyPem.trim().isEmpty)
-             ? placeholderPrivateKey
-             : privateKeyPem,
-       ),
-       _authUrl =
-           (authUrl != null && authUrl.trim().isNotEmpty)
-               ? Uri.tryParse(authUrl.trim())
-               : null,
-       _authClientId = authClientId,
-       _authClientSecret = authClientSecret,
-       _authHeaders =
-           authHeaders != null ? Map<String, String>.from(authHeaders) : null,
-       _authPayloadOverrides =
-           authPayloadOverrides != null
-               ? Map<String, dynamic>.from(authPayloadOverrides)
-               : null,
-       _authGrantType = authGrantType,
-       _tokenFieldOverride = tokenFieldOverride,
-       _expiresInFieldOverride = expiresInFieldOverride,
-       _expiresAtFieldOverride = expiresAtFieldOverride,
-       _tokenClockSkew = tokenClockSkew,
-       _includeApiKeyInAuth = includeApiKeyInAuth;
-
-  static const String placeholderPrivateKey = '''
------BEGIN PRIVATE KEY-----
-YOUR_PRIVATE_KEY_HERE
------END PRIVATE KEY-----
-''';
+    this.privateKeyPem,
+    this.requestTimeout = const Duration(seconds: 12),
+    this.authUrl,
+    this.authClientId,
+    this.authClientSecret,
+    this.authHeaders = const {},
+    this.authPayloadOverrides = const {},
+    this.authGrantType,
+    this.tokenFieldOverride,
+    this.expiresInFieldOverride,
+    this.expiresAtFieldOverride,
+    this.tokenClockSkew = const Duration(seconds: 30),
+    this.includeApiKeyInAuth = true,
+  });
 
   final String baseUrl;
   final String apiKey;
+  final String? privateKeyPem;
+  final Duration requestTimeout;
+  final String? authUrl;
+  final String? authClientId;
+  final String? authClientSecret;
+  final Map<String, String> authHeaders;
+  final Map<String, dynamic> authPayloadOverrides;
+  final String? authGrantType;
+  final String? tokenFieldOverride;
+  final String? expiresInFieldOverride;
+  final String? expiresAtFieldOverride;
+  final Duration tokenClockSkew;
+  final bool includeApiKeyInAuth;
 
-  final http.Client _client;
-  final Duration _requestTimeout;
-  final JsonWebKey _signingKey;
-  final Uri? _authUrl;
-  final String? _authClientId;
-  final String? _authClientSecret;
-  final Map<String, String>? _authHeaders;
-  final Map<String, dynamic>? _authPayloadOverrides;
-  final String? _authGrantType;
-  final String? _tokenFieldOverride;
-  final String? _expiresInFieldOverride;
-  final String? _expiresAtFieldOverride;
-  final Duration _tokenClockSkew;
-  final bool _includeApiKeyInAuth;
+  String? _cachedToken;
+  DateTime? _tokenExpiry;
 
-  String? _fabricToken;
-  DateTime? _fabricTokenExpiry;
-
-  Future<String> applyFabricToken({bool force = false}) async {
-    final tokenStillValid =
-        _fabricToken != null &&
-        _fabricTokenExpiry != null &&
-        DateTime.now().isBefore(_fabricTokenExpiry!);
-    if (!force && tokenStillValid) {
-      return _fabricToken!;
+  Future<String> _getAccessToken() async {
+    if (_cachedToken != null && _tokenExpiry != null &&
+        DateTime.now().isBefore(_tokenExpiry!.subtract(tokenClockSkew))) {
+      return _cachedToken!;
     }
 
-    final token = await _retrieveFabricToken();
-    _storeFabricToken(token);
-    return _fabricToken!;
+    final authUri = Uri.parse(authUrl ?? '$baseUrl/oauth/token');
+    final payload = <String, dynamic>{
+      'grant_type': authGrantType ?? 'client_credentials',
+      if (authClientId != null) 'client_id': authClientId,
+      if (authClientSecret != null) 'client_secret': authClientSecret,
+      if (includeApiKeyInAuth) 'api_key': apiKey,
+      ...authPayloadOverrides,
+    };
+
+    final headers = <String, String>{
+      'Content-Type': 'application/x-www-form-urlencoded',
+      ...authHeaders,
+    };
+
+    final response = await http.post(
+      authUri,
+      headers: headers,
+      body: payload,
+      encoding: Encoding.getByName('utf-8'),
+    ).timeout(requestTimeout);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Telebirr auth failed: ${response.statusCode} ${response.body}');
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final tokenField = tokenFieldOverride ?? 'access_token';
+    final token = data[tokenField] as String?;
+
+    if (token == null) {
+      throw Exception('Telebirr auth response missing token field "$tokenField"');
+    }
+
+    _cachedToken = token;
+
+    // Calculate expiry
+    final expiresInField = expiresInFieldOverride ?? 'expires_in';
+    final expiresAtField = expiresAtFieldOverride ?? 'expires_at';
+
+    if (data.containsKey(expiresAtField)) {
+      _tokenExpiry = DateTime.parse(data[expiresAtField] as String);
+    } else if (data.containsKey(expiresInField)) {
+      final expiresIn = data[expiresInField] as int;
+      _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn));
+    } else {
+      // Default to 1 hour if no expiry info
+      _tokenExpiry = DateTime.now().add(const Duration(hours: 1));
+    }
+
+    return token;
   }
 
   Future<Map<String, dynamic>> createOrder({
     required String fromUserId,
     required double amount,
     required String merchantOrderId,
-    String? callbackUrl,
+    required String callbackUrl,
   }) async {
-    await applyFabricToken();
+    final token = await _getAccessToken();
+    final uri = Uri.parse('$baseUrl/orders');
 
-    final payload = <String, dynamic>{
+    final payload = {
       'merchantOrderId': merchantOrderId,
-      'amount': amount,
+      'amount': amount.toStringAsFixed(2),
       'currency': 'ETB',
-      'payer': {'id': fromUserId},
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
-      if (callbackUrl != null) 'callbackUrl': callbackUrl,
+      'description': 'Equb Group Contribution',
+      'callbackUrl': callbackUrl,
+      'payerId': fromUserId,
+      'timestamp': DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()),
     };
 
-    payload.removeWhere((key, value) => value == null);
+    final signature = _generateSignature(payload);
 
-    final signature = _signPayload(payload);
-
-    final response = await _post(
-      path: 'orders',
-      payload: payload,
+    final response = await http.post(
+      uri,
       headers: {
-        'X-API-KEY': apiKey,
-        if (_fabricToken != null) 'X-FABRIC-TOKEN': _fabricToken!,
-        'X-SIGNATURE': signature,
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+        'X-API-Key': apiKey,
+        'X-Signature': signature,
       },
-      retryOnUnauthorized: true,
-    );
+      body: jsonEncode(payload),
+    ).timeout(requestTimeout);
 
-    return _decodeResponse(response);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Telebirr createOrder failed: ${response.statusCode} ${response.body}');
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return data;
   }
 
   Future<Map<String, dynamic>> queryOrder(String merchantOrderId) async {
-    await applyFabricToken();
+    final token = await _getAccessToken();
+    final uri = Uri.parse('$baseUrl/orders/$merchantOrderId');
 
-    final response = await _get(
-      path: 'orders/$merchantOrderId',
+    final response = await http.get(
+      uri,
       headers: {
-        'X-API-KEY': apiKey,
-        if (_fabricToken != null) 'X-FABRIC-TOKEN': _fabricToken!,
+        'Authorization': 'Bearer $token',
+        'X-API-Key': apiKey,
       },
-      retryOnUnauthorized: true,
-    );
+    ).timeout(requestTimeout);
 
-    return _decodeResponse(response);
-  }
-
-  Uri buildCheckoutUri(String prepayId) => _buildUri('pay?prepayId=$prepayId');
-
-  void clearFabricToken() {
-    _fabricToken = null;
-    _fabricTokenExpiry = null;
-  }
-
-  void dispose() => _client.close();
-
-  Future<_FabricToken> _retrieveFabricToken() async {
-    if (_authUrl == null) {
-      return _simulateToken();
-    }
-    final payload = <String, dynamic>{
-      if (_authClientId != null) 'clientId': _authClientId,
-      if (_authClientSecret != null) 'clientSecret': _authClientSecret,
-      if (_authGrantType != null) 'grantType': _authGrantType,
-      ...?_authPayloadOverrides,
-    };
-    if (payload.isEmpty && _authGrantType == null) {
-      payload['grantType'] = 'client_credentials';
-    }
-    payload.removeWhere((key, value) {
-      if (value == null) return true;
-      if (value is String) return value.trim().isEmpty;
-      return false;
-    });
-
-    final headers = _filteredHeaders({
-      if (_includeApiKeyInAuth && apiKey.isNotEmpty) 'X-API-KEY': apiKey,
-      ...?_authHeaders,
-    });
-
-    final contentTypeKey = headers.keys.firstWhere(
-      (key) => key.toLowerCase() == 'content-type',
-      orElse: () => '',
-    );
-
-    final contentType = contentTypeKey.isEmpty ? null : headers[contentTypeKey];
-    final isFormEncoded =
-        contentType != null &&
-        contentType.toLowerCase().contains('application/x-www-form-urlencoded');
-
-    if (!isFormEncoded && contentType == null) {
-      headers['Content-Type'] = 'application/json';
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Telebirr queryOrder failed: ${response.statusCode} ${response.body}');
     }
 
-    final body = isFormEncoded ? _encodeFormBody(payload) : jsonEncode(payload);
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return data;
+  }
 
-    try {
-      final response = await _client
-          .post(_authUrl, headers: headers, body: body)
-          .timeout(_requestTimeout);
-      final decoded = _decodeResponse(response);
-      return _parseTokenPayload(decoded);
-    } on TimeoutException catch (_) {
-      throw TelebirrApiException('Telebirr auth request timed out');
+  Uri buildCheckoutUri(String prepayId) {
+    return Uri.parse('$baseUrl/checkout/$prepayId');
+  }
+
+  String _generateSignature(Map<String, dynamic> payload) {
+    if (privateKeyPem == null) {
+      throw Exception('Private key required for signature generation');
     }
+
+    final sortedKeys = payload.keys.toList()..sort();
+    final signatureData = sortedKeys.map((key) => '$key=${payload[key]}').join('&');
+
+    final privateKey = _loadPrivateKey(privateKeyPem!);
+    final signer = RSASigner(SHA256Digest(), '0609608648016503040201'); // SHA256withRSA
+    signer.init(true, PrivateKeyParameter<RSAPrivateKey>(privateKey));
+
+    final signature = signer.generateSignature(Uint8List.fromList(signatureData.codeUnits));
+
+    return base64Encode(signature.bytes);
   }
 
-  String _signPayload(Map<String, dynamic> payload) {
-    final builder = JsonWebSignatureBuilder();
-    builder.jsonContent = payload;
-    builder.addRecipient(_signingKey, algorithm: 'RS256');
-    final jws = builder.build();
-    return jws.toCompactSerialization();
-  }
-
-  _FabricToken _simulateToken() {
-    final now = DateTime.now();
-    return _FabricToken(
-      token: 'simulated_fabric_token_${now.millisecondsSinceEpoch}',
-      expiry: now.add(const Duration(minutes: 5)),
+  RSAPrivateKey _loadPrivateKey(String pem) {
+    // NOTE: The previous implementation referenced ASN.1 helpers that are not
+    // available in our current dependencies. Until we introduce a dedicated
+    // PEM/ASN.1 parser, fail fast with a clear error.
+    throw UnsupportedError(
+      'Telebirr RSA private-key parsing is not implemented. Provide a compatible signing implementation before using Telebirr payments.',
     );
   }
-
-  void _storeFabricToken(_FabricToken token) {
-    final adjustedExpiry = token.expiry.subtract(_tokenClockSkew);
-    _fabricToken = token.token;
-    _fabricTokenExpiry =
-        adjustedExpiry.isAfter(DateTime.now())
-            ? adjustedExpiry
-            : DateTime.now().add(const Duration(seconds: 30));
-  }
-
-  Future<http.Response> _post({
-    required String path,
-    required Map<String, dynamic> payload,
-    required Map<String, String> headers,
-    bool retryOnUnauthorized = false,
-  }) async {
-    final uri = _buildUri(path);
-    final body = jsonEncode(payload);
-    try {
-      final response = await _client
-          .post(uri, headers: _jsonHeaders(headers), body: body)
-          .timeout(_requestTimeout);
-      if (response.statusCode == 401 && retryOnUnauthorized) {
-        await applyFabricToken(force: true);
-        final retryHeaders = <String, String>{
-          ...headers,
-          if (_fabricToken != null) 'X-FABRIC-TOKEN': _fabricToken!,
-        };
-        return _client
-            .post(uri, headers: _jsonHeaders(retryHeaders), body: body)
-            .timeout(_requestTimeout);
-      }
-      return response;
-    } on TimeoutException catch (_) {
-      throw TelebirrApiException('Telebirr POST $path timed out');
-    }
-  }
-
-  Future<http.Response> _get({
-    required String path,
-    required Map<String, String> headers,
-    bool retryOnUnauthorized = false,
-  }) async {
-    final uri = _buildUri(path);
-    try {
-      final response = await _client
-          .get(uri, headers: _filteredHeaders(headers))
-          .timeout(_requestTimeout);
-      if (response.statusCode == 401 && retryOnUnauthorized) {
-        await applyFabricToken(force: true);
-        final retryHeaders = <String, String>{
-          ...headers,
-          if (_fabricToken != null) 'X-FABRIC-TOKEN': _fabricToken!,
-        };
-        return _client
-            .get(uri, headers: _filteredHeaders(retryHeaders))
-            .timeout(_requestTimeout);
-      }
-      return response;
-    } on TimeoutException catch (_) {
-      throw TelebirrApiException('Telebirr GET $path timed out');
-    }
-  }
-
-  Map<String, String> _jsonHeaders(Map<String, String> headers) {
-    final map = <String, String>{'Content-Type': 'application/json'};
-    map.addAll(_filteredHeaders(headers));
-    return map;
-  }
-
-  Map<String, String> _filteredHeaders(Map<String, String> headers) {
-    final map = <String, String>{};
-    headers.forEach((key, value) {
-      if (value.isNotEmpty) {
-        map[key] = value;
-      }
-    });
-    return map;
-  }
-
-  Map<String, dynamic> _decodeResponse(http.Response response) {
-    final status = response.statusCode;
-    if (status >= 200 && status < 300) {
-      if (response.body.isEmpty) {
-        return const <String, dynamic>{};
-      }
-      try {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map<String, dynamic>) {
-          return decoded;
-        }
-        return <String, dynamic>{'data': decoded};
-      } on FormatException catch (_) {
-        throw TelebirrApiException(
-          'Telebirr returned invalid JSON',
-          statusCode: status,
-          responseBody: response.body,
-        );
-      }
-    }
-    throw TelebirrApiException(
-      'Telebirr request failed with status $status',
-      statusCode: status,
-      responseBody: response.body,
-    );
-  }
-
-  Uri _buildUri(String path) {
-    final cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    final base = baseUrl.endsWith('/') ? baseUrl : '$baseUrl/';
-    return Uri.parse(base).resolve(cleanPath);
-  }
-
-  _FabricToken _parseTokenPayload(Map<String, dynamic> payload) {
-    final Map<String, dynamic> flattened = _flattenPayload(payload);
-    final token = _extractString(flattened, [
-      _tokenFieldOverride,
-      'fabricToken',
-      'token',
-      'accessToken',
-      'access_token',
-    ]);
-
-    if (token == null || token.isEmpty) {
-      throw TelebirrApiException(
-        'Telebirr auth response missing token',
-        responseBody: jsonEncode(payload),
-      );
-    }
-
-    final now = DateTime.now();
-    final expiresInSeconds = _extractInt(flattened, [
-      _expiresInFieldOverride,
-      'expiresIn',
-      'expires_in',
-      'validFor',
-    ]);
-
-    DateTime expiry;
-    if (expiresInSeconds != null && expiresInSeconds > 0) {
-      expiry = now.add(Duration(seconds: expiresInSeconds));
-    } else {
-      final expiresAtValue = _extractDynamic(flattened, [
-        _expiresAtFieldOverride,
-        'expiresAt',
-        'expires_at',
-        'expiry',
-      ]);
-      expiry =
-          _parseExpiry(expiresAtValue) ?? now.add(const Duration(minutes: 5));
-    }
-
-    return _FabricToken(token: token, expiry: expiry);
-  }
-
-  Map<String, dynamic> _flattenPayload(Map<String, dynamic> payload) {
-    final flattened = Map<String, dynamic>.from(payload);
-    for (final key in ['data', 'result', 'payload']) {
-      final nested = payload[key];
-      if (nested is Map) {
-        flattened.addAll(Map<String, dynamic>.from(nested));
-      }
-    }
-    return flattened;
-  }
-
-  String? _extractString(Map<String, dynamic> payload, List<String?> keys) {
-    for (final key in keys) {
-      if (key == null || key.isEmpty) continue;
-      final value = payload[key];
-      if (value is String && value.isNotEmpty) {
-        return value;
-      }
-    }
-    return null;
-  }
-
-  int? _extractInt(Map<String, dynamic> payload, List<String?> keys) {
-    for (final key in keys) {
-      if (key == null || key.isEmpty) continue;
-      final value = payload[key];
-      final result = _coerceToInt(value);
-      if (result != null) {
-        return result;
-      }
-    }
-    return null;
-  }
-
-  dynamic _extractDynamic(Map<String, dynamic> payload, List<String?> keys) {
-    for (final key in keys) {
-      if (key == null || key.isEmpty) continue;
-      if (payload.containsKey(key)) {
-        return payload[key];
-      }
-    }
-    return null;
-  }
-
-  int? _coerceToInt(dynamic value) {
-    if (value == null) return null;
-    if (value is int) return value;
-    if (value is double) return value.round();
-    if (value is String) {
-      return int.tryParse(value.trim());
-    }
-    return null;
-  }
-
-  DateTime? _parseExpiry(dynamic value) {
-    if (value == null) return null;
-    if (value is DateTime) return value;
-    if (value is int) {
-      // Assume epoch seconds if the number is reasonable, otherwise milliseconds.
-      if (value > 1000000000000) {
-        return DateTime.fromMillisecondsSinceEpoch(value);
-      }
-      return DateTime.fromMillisecondsSinceEpoch(value * 1000);
-    }
-    if (value is String) {
-      final trimmed = value.trim();
-      if (trimmed.isEmpty) return null;
-      final parsed = DateTime.tryParse(trimmed);
-      if (parsed != null) return parsed;
-      final asInt = int.tryParse(trimmed);
-      if (asInt != null) {
-        return _parseExpiry(asInt);
-      }
-    }
-    return null;
-  }
-
-  String _encodeFormBody(Map<String, dynamic> payload) {
-    if (payload.isEmpty) {
-      return '';
-    }
-    return payload.entries
-        .map(
-          (entry) =>
-              '${Uri.encodeQueryComponent(entry.key)}=${Uri.encodeQueryComponent(entry.value.toString())}',
-        )
-        .join('&');
-  }
-}
-
-class _FabricToken {
-  const _FabricToken({required this.token, required this.expiry});
-
-  final String token;
-  final DateTime expiry;
 }

@@ -20,7 +20,25 @@
 
     "groups": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null",
+
+      "$groupId": {
+        "messages": {
+          ".read": "auth != null && root.child('groups/' + $groupId + '/members').hasChild(auth.uid)",
+          ".write": "auth != null && root.child('groups/' + $groupId + '/members').hasChild(auth.uid)",
+          ".indexOn": ["timestamp"],
+          "$messageId": {
+            "readReceipts": {
+              ".read": "auth != null && root.child('groups/' + $groupId + '/members').hasChild(auth.uid)",
+              ".write": "auth != null && root.child('groups/' + $groupId + '/members').hasChild(auth.uid)"
+            }
+          }
+        },
+        "typing": {
+          ".read": "auth != null && root.child('groups/' + $groupId + '/members').hasChild(auth.uid)",
+          ".write": "auth != null && root.child('groups/' + $groupId + '/members').hasChild(auth.uid)"
+        }
+      }
     },
 
     "admins": {
@@ -45,6 +63,176 @@
           // Users can create their own queue entry once; only functions/admin should edit/delete.
           ".write": "auth != null && !data.exists() && newData.child('userId').val() === auth.uid"
         }
+      }
+    },
+
+    "id_documents": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$docId": {
+        ".read": "auth != null && (auth.uid === data.child('userId').val() || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && (auth.uid === data.child('userId').val() || (!data.exists() && auth.uid === newData.child('userId').val()) || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".indexOn": ["userId", "status", "createdAt"]
+      }
+    },
+
+    "auto_topup_rules": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$ruleId": {
+        ".read": "auth != null && (auth.uid === data.child('userId').val() || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && (auth.uid === data.child('userId').val() || (!data.exists() && auth.uid === newData.child('userId').val()) || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".indexOn": ["userId", "nextScheduledAt", "enabled"]
+      }
+    },
+
+    "auto_topup_executions": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$executionId": {
+        ".read": "auth != null && (auth.uid === data.child('userId').val() || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && auth.uid === data.child('userId').val() || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true",
+        ".indexOn": ["userId", "ruleId", "executedAt"]
+      }
+    },
+
+    "payout_schedules": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$payoutId": {
+        ".read": "auth != null && (root.child('groups/' + data.child('groupId').val() + '/members').hasChild(auth.uid) || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true",
+        ".indexOn": ["groupId", "recipientId", "status", "scheduledDate"]
+      }
+    },
+
+    "winner_selections": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$selectionId": {
+        ".read": "auth != null && (root.child('groups/' + data.child('groupId').val() + '/members').hasChild(auth.uid) || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true",
+        ".indexOn": ["groupId", "round"]
+      }
+    },
+
+    "user_email_preferences": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$userId": {
+        ".read": "auth != null && (auth.uid === $userId || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && (auth.uid === $userId || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)"
+      }
+    },
+
+    "email_notifications": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$emailId": {
+        ".read": "auth != null && (auth.uid === data.child('userId').val() || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true",
+        ".indexOn": ["userId", "sentAt", "type"]
+      }
+    },
+
+    "admin_audit_logs": {
+      ".read": "auth != null && (root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+      ".write": "auth != null && (root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+      "$logId": {
+        ".indexOn": ["timestamp", "adminId", "action", "severity"]
+      }
+    },
+
+    "compliance_reports": {
+      ".read": "auth != null && (root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+      ".write": "auth != null && (root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+      "$reportId": {
+        ".indexOn": ["generatedAt", "reportType", "adminId"]
+      }
+    },
+
+    "system_settings": {
+      ".read": "auth != null && (root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+      ".write": "auth != null && root.child('superadmins/' + auth.uid).val() === true",
+      "maintenance": {
+        ".read": "auth != null && (root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && (root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)"
+      }
+    },
+
+    "webhook_logs": {
+      ".read": "auth != null && (root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+      ".write": "auth != null",  // Allow webhook functions to write logs
+      ".indexOn": ["gateway", "merchantOrderId", "receivedAt"]
+    },
+
+    "transactions": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$transactionId": {
+        ".read": "auth != null && (auth.uid === data.child('fromUserId').val() || auth.uid === data.child('toUserId').val() || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && (auth.uid === data.child('fromUserId').val() || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".indexOn": ["gateway", "status", "createdAt"]
+      }
+    },
+
+    "user_onboarding": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$userId": {
+        ".read": "auth != null && (auth.uid === $userId || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && (auth.uid === $userId || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".indexOn": ["updatedAt"]
+      }
+    },
+
+    "user_devices": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$deviceId": {
+        ".read": "auth != null && (data.child('userId').val() === auth.uid || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && (data.child('userId').val() === auth.uid || (!data.exists() && auth.uid === newData.child('userId').val()) || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".indexOn": ["userId", "isTrusted", "lastLoginAt"]
+      }
+    },
+
+    "user_sessions": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$sessionId": {
+        ".read": "auth != null && (data.child('userId').val() === auth.uid || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && (data.child('userId').val() === auth.uid || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".indexOn": ["userId", "deviceId", "isActive", "lastActivityAt"]
+      }
+    },
+
+    "group_invitations": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$invitationId": {
+        ".read": "auth != null && (auth.uid === data.child('invitedUserId').val() || auth.uid === data.child('invitedBy').val() || root.child('groups/' + data.child('groupId').val() + '/members/' + auth.uid).exists() || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && (auth.uid === data.child('invitedBy').val() || (auth.uid === data.child('invitedUserId').val() && data.child('status').val() === 'pending') || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".indexOn": ["groupId", "invitedUserId", "status", "expiresAt"]
+      }
+    },
+
+    "scheduled_notifications": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$notificationId": {
+        ".read": "auth != null && (auth.uid === data.child('userId').val() || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true",
+        ".indexOn": ["userId", "notificationType", "scheduledTime", "status"]
+      }
+    },
+
+    "sent_notifications": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$notificationId": {
+        ".read": "auth != null && (auth.uid === data.child('userId').val() || root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
+        ".write": "auth != null && root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true",
+        ".indexOn": ["userId", "notificationType", "sentAt"]
       }
     },
 

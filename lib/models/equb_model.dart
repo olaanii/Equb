@@ -21,6 +21,8 @@ extension EqubCycleX on EqubCycle {
     }
   }
 
+  Duration get interval => Duration(days: defaultDays ?? 30);
+
   String get label {
     switch (this) {
       case EqubCycle.daily:

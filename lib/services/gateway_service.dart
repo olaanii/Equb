@@ -161,6 +161,11 @@ class GatewayService {
         .toList(growable: false);
   }
 
+  Future<List<PaymentGatewayConfig>> getEnabledGateways({FeatureFlags? flags}) async {
+    final gateways = await listGateways(flags: flags);
+    return gateways.where((g) => g.enabled).toList(growable: false);
+  }
+
   Future<void> upsertGateway(PaymentGatewayConfig cfg) async {
     final index = _configs.indexWhere((existing) => existing.id == cfg.id);
     if (index == -1) {
