@@ -3,10 +3,7 @@ import 'package:equb/models/onboarding_state.dart';
 import 'package:equb/services/system_log_service.dart';
 
 class OnboardingService {
-  OnboardingService({
-    required this.firestore,
-    required this.logService,
-  });
+  OnboardingService({required this.firestore, required this.logService});
 
   final FirebaseFirestore firestore;
   final SystemLogService logService;
@@ -77,10 +74,7 @@ class OnboardingService {
         LogLevel.info,
         'onboarding_step_updated',
         'User onboarding step updated',
-        context: {
-          'userId': userId,
-          'step': step.name,
-        },
+        context: {'userId': userId, 'step': step.name},
       );
     } catch (e) {
       logService.log(
@@ -183,7 +177,8 @@ class OnboardingService {
       }
 
       final userData = userDoc.data();
-      final onboardingCompleted = userData?['onboardingCompleted'] as bool? ?? false;
+      final onboardingCompleted =
+          userData?['onboardingCompleted'] as bool? ?? false;
 
       return !onboardingCompleted;
     } catch (e) {
@@ -253,4 +248,3 @@ class OnboardingService {
     }
   }
 }
-

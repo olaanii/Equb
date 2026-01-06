@@ -177,9 +177,10 @@ final currentUserProvider = StreamProvider<UserModel?>((ref) {
             final raw = event.snapshot.value;
             UserModel model;
             if (raw is Map) {
-              model = UserModel.fromJson(
-                {...Map<String, dynamic>.from(raw), 'id': uid},
-              );
+              model = UserModel.fromJson({
+                ...Map<String, dynamic>.from(raw),
+                'id': uid,
+              });
             } else {
               model = (await userRepo.getUser(uid)) ?? fallback;
             }
@@ -253,12 +254,13 @@ final equbStoreProvider = Provider<EqubStore>((ref) {
   return EqubStore(seed: seed);
 });
 
-final Provider<EqubRotationEngine> equbRotationEngineProvider = Provider<EqubRotationEngine>((ref) {
-  final engine = EqubRotationEngine();
-  final payoutScheduler = ref.watch(payoutSchedulerServiceProvider);
-  engine.setPayoutScheduler(payoutScheduler);
-  return engine;
-});
+final Provider<EqubRotationEngine> equbRotationEngineProvider =
+    Provider<EqubRotationEngine>((ref) {
+      final engine = EqubRotationEngine();
+      final payoutScheduler = ref.watch(payoutSchedulerServiceProvider);
+      engine.setPayoutScheduler(payoutScheduler);
+      return engine;
+    });
 
 final equbRepositoryProvider = Provider<EqubRepository>((ref) {
   final logService = ref.watch(systemLogServiceProvider);
@@ -405,32 +407,29 @@ final equbGroupsProvider = StreamProvider<List<EqubGroup>>((ref) {
   return stream();
 });
 
-final equbGroupProvider = StreamProvider.family<EqubGroup?, String>(
-  (ref, groupId) {
-    final repo = ref.watch(equbRepositoryProvider);
-    if (Firebase.apps.isEmpty) {
-      return Stream.fromFuture(repo.findGroup(groupId));
-    }
+final equbGroupProvider = StreamProvider.family<EqubGroup?, String>((
+  ref,
+  groupId,
+) {
+  final repo = ref.watch(equbRepositoryProvider);
+  if (Firebase.apps.isEmpty) {
+    return Stream.fromFuture(repo.findGroup(groupId));
+  }
 
-    final groupRef = FirebaseDatabase.instance.ref('groups/$groupId');
-    return groupRef.onValue.asyncMap((_) async {
-      return repo.findGroup(groupId, syncRotation: true);
+  final groupRef = FirebaseDatabase.instance.ref('groups/$groupId');
+  return groupRef.onValue.asyncMap((_) async {
+    return repo.findGroup(groupId, syncRotation: true);
+  });
+});
+
+final equbGroupMetricsProvider =
+    FutureProvider.family<EqubGroupMetrics, String>((ref, groupId) async {
+      final repo = ref.watch(equbRepositoryProvider);
+      return repo.fetchGroupMetrics(groupId);
     });
-  },
-);
-
-final equbGroupMetricsProvider = FutureProvider.family<EqubGroupMetrics, String>(
-  (ref, groupId) async {
-    final repo = ref.watch(equbRepositoryProvider);
-    return repo.fetchGroupMetrics(groupId);
-  },
-);
 
 final equbRoundSummariesProvider =
-    FutureProvider.family<List<EqubRoundSummary>, String>((
-      ref,
-      groupId,
-    ) async {
+    FutureProvider.family<List<EqubRoundSummary>, String>((ref, groupId) async {
       final repo = ref.watch(equbRepositoryProvider);
       return repo.fetchRoundSummaries(groupId);
     });
@@ -438,7 +437,9 @@ final equbRoundSummariesProvider =
 final walletRepositoryProvider = Provider<WalletRepository>((ref) {
   final logService = ref.watch(systemLogServiceProvider);
   if (Firebase.apps.isEmpty) {
-    throw UnimplementedError('Firebase not initialized; wallet is unavailable.');
+    throw UnimplementedError(
+      'Firebase not initialized; wallet is unavailable.',
+    );
   }
 
   return RtdbWalletRepository(
@@ -464,7 +465,9 @@ final userRepositoryProvider = Provider<UserRepository>((ref) {
 final imageStorageServiceProvider = Provider<ImageStorageService>((ref) {
   final logService = ref.watch(systemLogServiceProvider);
   if (Firebase.apps.isEmpty) {
-    throw UnimplementedError('Firebase not initialized; storage is unavailable.');
+    throw UnimplementedError(
+      'Firebase not initialized; storage is unavailable.',
+    );
   }
   return ImageStorageService(logService: logService);
 });
@@ -485,13 +488,12 @@ final deviceTokenRegistrarProvider = Provider<DeviceTokenRegistrar>((ref) {
   );
 });
 
-final notificationReminderServiceProvider = Provider<NotificationReminderService>(
-  (ref) {
-    final service = NotificationReminderService();
-    ref.onDispose(service.dispose);
-    return service;
-  },
-);
+final notificationReminderServiceProvider =
+    Provider<NotificationReminderService>((ref) {
+      final service = NotificationReminderService();
+      ref.onDispose(service.dispose);
+      return service;
+    });
 
 final reminderSchedulerServiceProvider = Provider<RtdbReminderSchedulerService>(
   (ref) {
@@ -512,7 +514,9 @@ final reminderSchedulerServiceProvider = Provider<RtdbReminderSchedulerService>(
   },
 );
 
-final notificationRepositoryProvider = Provider<RtdbNotificationRepository>((ref) {
+final notificationRepositoryProvider = Provider<RtdbNotificationRepository>((
+  ref,
+) {
   if (Firebase.apps.isEmpty) {
     throw UnimplementedError(
       'Firebase not initialized; notifications are unavailable.',
@@ -531,7 +535,9 @@ final notificationsProvider = StreamProvider<List<UserNotification>>((ref) {
 
 final pointsRepositoryProvider = Provider<PointsRepository>((ref) {
   if (Firebase.apps.isEmpty) {
-    throw UnimplementedError('Firebase not initialized; points are unavailable.');
+    throw UnimplementedError(
+      'Firebase not initialized; points are unavailable.',
+    );
   }
   return RtdbPointsRepository(FirebaseDatabase.instance);
 });
@@ -558,30 +564,29 @@ final chatServiceProvider = Provider<ChatService>((ref) {
   return service;
 });
 
-final groupChatMessagesProvider = StreamProvider.family<List<ChatMessage>, String>((ref, groupId) async* {
-  final chatService = ref.watch(chatServiceProvider);
+final groupChatMessagesProvider =
+    StreamProvider.family<List<ChatMessage>, String>((ref, groupId) async* {
+      final chatService = ref.watch(chatServiceProvider);
 
-  final history = await chatService.getChatHistory(groupId);
-  final allMessages = List<ChatMessage>.from(history);
-  allMessages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-  yield List<ChatMessage>.unmodifiable(allMessages);
-
-  await for (final newMessage in chatService.watchMessages(groupId)) {
-    if (!allMessages.any((msg) => msg.id == newMessage.id)) {
-      allMessages.add(newMessage);
+      final history = await chatService.getChatHistory(groupId);
+      final allMessages = List<ChatMessage>.from(history);
       allMessages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
       yield List<ChatMessage>.unmodifiable(allMessages);
-    }
-  }
-});
 
-final groupTypingStatusProvider = StreamProvider.family<Map<String, String>, String>((
-  ref,
-  groupId,
-) {
-  final chatService = ref.watch(chatServiceProvider);
-  return chatService.watchTypingStatus(groupId);
-});
+      await for (final newMessage in chatService.watchMessages(groupId)) {
+        if (!allMessages.any((msg) => msg.id == newMessage.id)) {
+          allMessages.add(newMessage);
+          allMessages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+          yield List<ChatMessage>.unmodifiable(allMessages);
+        }
+      }
+    });
+
+final groupTypingStatusProvider =
+    StreamProvider.family<Map<String, String>, String>((ref, groupId) {
+      final chatService = ref.watch(chatServiceProvider);
+      return chatService.watchTypingStatus(groupId);
+    });
 
 final idScanServiceProvider = Provider<IdScanService>((ref) {
   final logService = ref.watch(systemLogServiceProvider);
@@ -593,7 +598,9 @@ final idScanServiceProvider = Provider<IdScanService>((ref) {
 final idDocumentRepositoryProvider = Provider<IdDocumentRepository>((ref) {
   final logService = ref.watch(systemLogServiceProvider);
   if (Firebase.apps.isEmpty) {
-    throw UnimplementedError('Firebase not initialized; ID document repository is unavailable.');
+    throw UnimplementedError(
+      'Firebase not initialized; ID document repository is unavailable.',
+    );
   }
 
   return IdDocumentRepository(
@@ -618,7 +625,9 @@ final pendingIdDocumentsProvider = StreamProvider<List<IdDocument>>((ref) {
 final autoTopupRepositoryProvider = Provider<AutoTopupRepository>((ref) {
   final logService = ref.watch(systemLogServiceProvider);
   if (Firebase.apps.isEmpty) {
-    throw UnimplementedError('Firebase not initialized; auto top-up is unavailable.');
+    throw UnimplementedError(
+      'Firebase not initialized; auto top-up is unavailable.',
+    );
   }
 
   return AutoTopupRepository(
@@ -652,7 +661,9 @@ final userAutoTopupRulesProvider = StreamProvider<List<AutoTopupRule>>((ref) {
   return repository.watchUserRules(user.id);
 });
 
-final userAutoTopupHistoryProvider = StreamProvider<List<AutoTopupExecution>>((ref) {
+final userAutoTopupHistoryProvider = StreamProvider<List<AutoTopupExecution>>((
+  ref,
+) {
   final user = ref.watch(currentUserProvider).value;
   if (user == null) return const Stream.empty();
 
@@ -712,7 +723,9 @@ final onboardingServiceProvider = Provider<OnboardingService>((ref) {
   );
 });
 
-final pushNotificationSchedulerProvider = Provider<PushNotificationScheduler>((ref) {
+final pushNotificationSchedulerProvider = Provider<PushNotificationScheduler>((
+  ref,
+) {
   return PushNotificationScheduler(
     firestore: FirebaseFirestore.instance,
     functions: FirebaseFunctions.instance,
@@ -728,12 +741,12 @@ final groupManagementServiceProvider = Provider<GroupManagementService>((ref) {
 });
 
 final biometricAuthServiceProvider = Provider<BiometricAuthService>((ref) {
-  return BiometricAuthService(
-    logService: ref.watch(systemLogServiceProvider),
-  );
+  return BiometricAuthService(logService: ref.watch(systemLogServiceProvider));
 });
 
-final deviceManagementServiceProvider = Provider<DeviceManagementService>((ref) {
+final deviceManagementServiceProvider = Provider<DeviceManagementService>((
+  ref,
+) {
   return DeviceManagementService(
     firestore: FirebaseFirestore.instance,
     logService: ref.watch(systemLogServiceProvider),

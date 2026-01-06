@@ -60,7 +60,6 @@
       ".write": false,
       "deposits": {
         "$queueId": {
-          // Users can create their own queue entry once; only functions/admin should edit/delete.
           ".write": "auth != null && !data.exists() && newData.child('userId').val() === auth.uid"
         }
       }
@@ -162,7 +161,7 @@
 
     "webhook_logs": {
       ".read": "auth != null && (root.child('admins/' + auth.uid).val() === true || root.child('superadmins/' + auth.uid).val() === true)",
-      ".write": "auth != null",  // Allow webhook functions to write logs
+      ".write": "auth != null",  
       ".indexOn": ["gateway", "merchantOrderId", "receivedAt"]
     },
 

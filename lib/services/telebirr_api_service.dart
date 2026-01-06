@@ -44,7 +44,8 @@ class TelebirrApiService {
   DateTime? _tokenExpiry;
 
   Future<String> _getAccessToken() async {
-    if (_cachedToken != null && _tokenExpiry != null &&
+    if (_cachedToken != null &&
+        _tokenExpiry != null &&
         DateTime.now().isBefore(_tokenExpiry!.subtract(tokenClockSkew))) {
       return _cachedToken!;
     }
@@ -63,15 +64,19 @@ class TelebirrApiService {
       ...authHeaders,
     };
 
-    final response = await http.post(
-      authUri,
-      headers: headers,
-      body: payload,
-      encoding: Encoding.getByName('utf-8'),
-    ).timeout(requestTimeout);
+    final response = await http
+        .post(
+          authUri,
+          headers: headers,
+          body: payload,
+          encoding: Encoding.getByName('utf-8'),
+        )
+        .timeout(requestTimeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Telebirr auth failed: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Telebirr auth failed: ${response.statusCode} ${response.body}',
+      );
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -79,7 +84,9 @@ class TelebirrApiService {
     final token = data[tokenField] as String?;
 
     if (token == null) {
-      throw Exception('Telebirr auth response missing token field "$tokenField"');
+      throw Exception(
+        'Telebirr auth response missing token field "$tokenField"',
+      );
     }
 
     _cachedToken = token;
@@ -122,19 +129,23 @@ class TelebirrApiService {
 
     final signature = _generateSignature(payload);
 
-    final response = await http.post(
-      uri,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $token',
-        'X-API-Key': apiKey,
-        'X-Signature': signature,
-      },
-      body: jsonEncode(payload),
-    ).timeout(requestTimeout);
+    final response = await http
+        .post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+            'X-API-Key': apiKey,
+            'X-Signature': signature,
+          },
+          body: jsonEncode(payload),
+        )
+        .timeout(requestTimeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Telebirr createOrder failed: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Telebirr createOrder failed: ${response.statusCode} ${response.body}',
+      );
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -145,16 +156,17 @@ class TelebirrApiService {
     final token = await _getAccessToken();
     final uri = Uri.parse('$baseUrl/orders/$merchantOrderId');
 
-    final response = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $token',
-        'X-API-Key': apiKey,
-      },
-    ).timeout(requestTimeout);
+    final response = await http
+        .get(
+          uri,
+          headers: {'Authorization': 'Bearer $token', 'X-API-Key': apiKey},
+        )
+        .timeout(requestTimeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Telebirr queryOrder failed: ${response.statusCode} ${response.body}');
+      throw Exception(
+        'Telebirr queryOrder failed: ${response.statusCode} ${response.body}',
+      );
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -171,13 +183,20 @@ class TelebirrApiService {
     }
 
     final sortedKeys = payload.keys.toList()..sort();
-    final signatureData = sortedKeys.map((key) => '$key=${payload[key]}').join('&');
+    final signatureData = sortedKeys
+        .map((key) => '$key=${payload[key]}')
+        .join('&');
 
     final privateKey = _loadPrivateKey(privateKeyPem!);
-    final signer = RSASigner(SHA256Digest(), '0609608648016503040201'); // SHA256withRSA
+    final signer = RSASigner(
+      SHA256Digest(),
+      '0609608648016503040201',
+    ); // SHA256withRSA
     signer.init(true, PrivateKeyParameter<RSAPrivateKey>(privateKey));
 
-    final signature = signer.generateSignature(Uint8List.fromList(signatureData.codeUnits));
+    final signature = signer.generateSignature(
+      Uint8List.fromList(signatureData.codeUnits),
+    );
 
     return base64Encode(signature.bytes);
   }

@@ -66,20 +66,22 @@ class PayoutSchedule {
       recipientId: json['recipientId'] as String,
       amount: (json['amount'] as num).toDouble(),
       scheduledDate: DateTime.parse(json['scheduledDate'] as String),
-      type: typeString == 'final'
-          ? PayoutType.finalPayout
-          : PayoutType.values.firstWhere(
-              (e) => e.toString().split('.').last == typeString,
-              orElse: () => PayoutType.regular,
-            ),
+      type:
+          typeString == 'final'
+              ? PayoutType.finalPayout
+              : PayoutType.values.firstWhere(
+                (e) => e.toString().split('.').last == typeString,
+                orElse: () => PayoutType.regular,
+              ),
       status: PayoutStatus.values.firstWhere(
         (e) => e.toString().split('.').last == json['status'],
         orElse: () => PayoutStatus.pending,
       ),
       createdAt: DateTime.parse(json['createdAt'] as String),
-      processedAt: json['processedAt'] != null
-          ? DateTime.parse(json['processedAt'] as String)
-          : null,
+      processedAt:
+          json['processedAt'] != null
+              ? DateTime.parse(json['processedAt'] as String)
+              : null,
       transactionId: json['transactionId'] as String?,
       failureReason: json['failureReason'] as String?,
       metadata: json['metadata'] as Map<String, dynamic>? ?? const {},
@@ -94,9 +96,10 @@ class PayoutSchedule {
       'recipientId': recipientId,
       'amount': amount,
       'scheduledDate': scheduledDate.toIso8601String(),
-      'type': type == PayoutType.finalPayout
-          ? 'final'
-          : type.toString().split('.').last,
+      'type':
+          type == PayoutType.finalPayout
+              ? 'final'
+              : type.toString().split('.').last,
       'status': status.toString().split('.').last,
       'createdAt': createdAt.toIso8601String(),
       'processedAt': processedAt?.toIso8601String(),
@@ -279,4 +282,3 @@ class PayoutProcessingResult {
   final String? errorMessage;
   final Map<String, dynamic> metadata;
 }
-

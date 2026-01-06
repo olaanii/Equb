@@ -66,10 +66,7 @@ class PayoutSchedulerService {
             LogLevel.error,
             'payout_scheduler.processGroupPayouts',
             'Failed to process payouts for group',
-            context: {
-              'groupId': group.id,
-              'error': e.toString(),
-            },
+            context: {'groupId': group.id, 'error': e.toString()},
           );
         }
       }
@@ -84,7 +81,10 @@ class PayoutSchedulerService {
   }
 
   /// Process payouts for a specific group
-  Future<void> _processGroupPayouts(EqubGroup group, DateTime currentTime) async {
+  Future<void> _processGroupPayouts(
+    EqubGroup group,
+    DateTime currentTime,
+  ) async {
     // Check if it's time for a payout based on the group's schedule
     final nextPayoutDate = group.rotationState.nextPayoutDate;
 
@@ -149,21 +149,20 @@ class PayoutSchedulerService {
   /// Select a winner for the current round
   Future<WinnerSelectionResult?> _selectWinner(EqubGroup group) async {
     final currentRound = group.rotationState.currentRound + 1;
-    final eligibleMembers = group.members.where((member) {
-      // Check if member has completed their contributions
-      final progress = group.rotationState.contributionProgress[member] ?? 0.0;
-      return progress >= 1.0; // 100% contributed
-    }).toList();
+    final eligibleMembers =
+        group.members.where((member) {
+          // Check if member has completed their contributions
+          final progress =
+              group.rotationState.contributionProgress[member] ?? 0.0;
+          return progress >= 1.0; // 100% contributed
+        }).toList();
 
     if (eligibleMembers.isEmpty) {
       logService.log(
         LogLevel.warning,
         'payout_scheduler.selectWinner',
         'No eligible members for payout',
-        context: {
-          'groupId': group.id,
-          'round': currentRound,
-        },
+        context: {'groupId': group.id, 'round': currentRound},
       );
       return null;
     }
@@ -179,14 +178,20 @@ class PayoutSchedulerService {
         break;
 
       case PayoutStrategy.fixedOrder:
-        selectedRecipient = _selectFixedOrderWinner(group, eligibleMembers, currentRound);
+        selectedRecipient = _selectFixedOrderWinner(
+          group,
+          eligibleMembers,
+          currentRound,
+        );
         strategy = 'fixed_order';
         break;
 
       case PayoutStrategy.adminAssigned:
         // Check for admin assignment
-        final adminAssignment = group.scheduleConfig.adminAssignments[currentRound];
-        if (adminAssignment != null && eligibleMembers.contains(adminAssignment)) {
+        final adminAssignment =
+            group.scheduleConfig.adminAssignments[currentRound];
+        if (adminAssignment != null &&
+            eligibleMembers.contains(adminAssignment)) {
           selectedRecipient = adminAssignment;
           strategy = 'admin_assigned';
         } else {
@@ -214,7 +219,11 @@ class PayoutSchedulerService {
     return eligibleMembers[random.nextInt(eligibleMembers.length)];
   }
 
-  String _selectFixedOrderWinner(EqubGroup group, List<String> eligibleMembers, int round) {
+  String _selectFixedOrderWinner(
+    EqubGroup group,
+    List<String> eligibleMembers,
+    int round,
+  ) {
     final preferredOrder = group.scheduleConfig.preferredOrder;
     if (preferredOrder.isNotEmpty) {
       final index = (round - 1) % preferredOrder.length;
@@ -251,7 +260,8 @@ class PayoutSchedulerService {
 
       // Create payout schedule
       final payoutSchedule = PayoutSchedule(
-        id: 'payout_${group.id}_${winnerResult.round}_${DateTime.now().millisecondsSinceEpoch}',
+        id:
+            'payout_${group.id}_${winnerResult.round}_${DateTime.now().millisecondsSinceEpoch}',
         groupId: group.id,
         round: winnerResult.round,
         recipientId: winnerResult.selectedRecipient,
@@ -394,17 +404,17 @@ class PayoutSchedulerService {
         LogLevel.error,
         'payout_scheduler.triggerManualPayout',
         'Manual payout trigger failed',
-        context: {
-          'groupId': groupId,
-          'error': e.toString(),
-        },
+        context: {'groupId': groupId, 'error': e.toString()},
       );
       return false;
     }
   }
 
   /// Get payout history for a group
-  Future<List<PayoutSchedule>> getGroupPayoutHistory(String groupId, {int limit = 50}) async {
+  Future<List<PayoutSchedule>> getGroupPayoutHistory(
+    String groupId, {
+    int limit = 50,
+  }) async {
     // In a real implementation, this would query a payout schedule repository
     // For now, we'll derive this from the group's rotation history
     try {
@@ -414,18 +424,20 @@ class PayoutSchedulerService {
       final schedules = <PayoutSchedule>[];
 
       for (final record in group.rotationState.history) {
-        schedules.add(PayoutSchedule(
-          id: 'payout_${groupId}_${record.round}',
-          groupId: groupId,
-          round: record.round,
-          recipientId: record.memberId,
-          amount: record.amount,
-          scheduledDate: record.scheduledFor,
-          type: PayoutType.regular,
-          status: PayoutStatus.completed,
-          createdAt: record.processedAt ?? record.scheduledFor,
-          processedAt: record.processedAt,
-        ));
+        schedules.add(
+          PayoutSchedule(
+            id: 'payout_${groupId}_${record.round}',
+            groupId: groupId,
+            round: record.round,
+            recipientId: record.memberId,
+            amount: record.amount,
+            scheduledDate: record.scheduledFor,
+            type: PayoutType.regular,
+            status: PayoutStatus.completed,
+            createdAt: record.processedAt ?? record.scheduledFor,
+            processedAt: record.processedAt,
+          ),
+        );
       }
 
       schedules.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -435,10 +447,7 @@ class PayoutSchedulerService {
         LogLevel.error,
         'payout_scheduler.getGroupPayoutHistory',
         'Failed to get payout history',
-        context: {
-          'groupId': groupId,
-          'error': e.toString(),
-        },
+        context: {'groupId': groupId, 'error': e.toString()},
       );
       return [];
     }
@@ -457,4 +466,3 @@ class PayoutSchedulerService {
     return 0; // Would return count of processed payouts
   }
 }
-

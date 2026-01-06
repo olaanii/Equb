@@ -6,9 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 
 class BiometricAuthService {
-  BiometricAuthService({
-    required this.logService,
-  });
+  BiometricAuthService({required this.logService});
 
   final SystemLogService logService;
   final LocalAuthentication _localAuth = LocalAuthentication();
@@ -24,7 +22,8 @@ class BiometricAuthService {
       final isDeviceSupported = await _localAuth.isDeviceSupported();
       final availableBiometrics = await _localAuth.getAvailableBiometrics();
 
-      final isAvailable = (canCheckBiometrics || isDeviceSupported) &&
+      final isAvailable =
+          (canCheckBiometrics || isDeviceSupported) &&
           availableBiometrics.isNotEmpty;
 
       logService.log(
@@ -103,7 +102,6 @@ class BiometricAuthService {
       );
 
       return result;
-
     } on PlatformException catch (e) {
       final errorMessage = _getErrorMessage(e.code);
 
@@ -231,4 +229,3 @@ class BiometricAuthResult {
 
   bool get hasError => error != null;
 }
-

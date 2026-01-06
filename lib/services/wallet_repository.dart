@@ -116,7 +116,8 @@ class FirestoreWalletRepository implements WalletRepository {
   Future<WalletSummary> getWalletSummary(String userId) {
     return _guard('getWalletSummary', () async {
       final userDoc = await _firestore.collection('users').doc(userId).get();
-      final balance = (userDoc.data()?['walletBalance'] as num?)?.toDouble() ?? 0.0;
+      final balance =
+          (userDoc.data()?['walletBalance'] as num?)?.toDouble() ?? 0.0;
       return WalletSummary(available: balance);
     }, context: {'userId': userId});
   }

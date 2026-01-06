@@ -60,7 +60,8 @@ class IdDocument {
   bool get isApproved => status == DocumentVerificationStatus.approved;
   bool get isRejected => status == DocumentVerificationStatus.rejected;
   bool get isPending => status == DocumentVerificationStatus.pending;
-  bool get requiresReview => status == DocumentVerificationStatus.requiresManualReview;
+  bool get requiresReview =>
+      status == DocumentVerificationStatus.requiresManualReview;
 
   factory IdDocument.fromJson(Map<String, dynamic> json) {
     return IdDocument(
@@ -85,15 +86,18 @@ class IdDocument {
       ),
       confidence: (json['confidence'] as num).toDouble(),
       createdAt: DateTime.parse(json['createdAt'] as String),
-      processedAt: json['processedAt'] != null
-          ? DateTime.parse(json['processedAt'] as String)
-          : null,
-      approvedAt: json['approvedAt'] != null
-          ? DateTime.parse(json['approvedAt'] as String)
-          : null,
-      rejectedAt: json['rejectedAt'] != null
-          ? DateTime.parse(json['rejectedAt'] as String)
-          : null,
+      processedAt:
+          json['processedAt'] != null
+              ? DateTime.parse(json['processedAt'] as String)
+              : null,
+      approvedAt:
+          json['approvedAt'] != null
+              ? DateTime.parse(json['approvedAt'] as String)
+              : null,
+      rejectedAt:
+          json['rejectedAt'] != null
+              ? DateTime.parse(json['rejectedAt'] as String)
+              : null,
       reviewerId: json['reviewerId'] as String?,
       rejectionReason: json['rejectionReason'] as String?,
       notes: json['notes'] as String?,
@@ -108,7 +112,8 @@ class IdDocument {
       'status': status.toString().split('.').last,
       'imageUrls': imageUrls,
       'extractedData': extractedData.map(
-        (key, value) => MapEntry(key.toString().split('.').last, value.toJson()),
+        (key, value) =>
+            MapEntry(key.toString().split('.').last, value.toJson()),
       ),
       'confidence': confidence,
       'createdAt': createdAt.toIso8601String(),
@@ -174,17 +179,19 @@ class ExtractedField {
     return ExtractedField(
       value: json['value'] as String,
       confidence: (json['confidence'] as num).toDouble(),
-      boundingBox: json['boundingBox'] != null
-          ? Rect.fromLTWH(
-              (json['boundingBox']['left'] as num).toDouble(),
-              (json['boundingBox']['top'] as num).toDouble(),
-              (json['boundingBox']['width'] as num).toDouble(),
-              (json['boundingBox']['height'] as num).toDouble(),
-            )
-          : null,
-      alternatives: json['alternatives'] != null
-          ? List<String>.from(json['alternatives'] as List)
-          : const [],
+      boundingBox:
+          json['boundingBox'] != null
+              ? Rect.fromLTWH(
+                (json['boundingBox']['left'] as num).toDouble(),
+                (json['boundingBox']['top'] as num).toDouble(),
+                (json['boundingBox']['width'] as num).toDouble(),
+                (json['boundingBox']['height'] as num).toDouble(),
+              )
+              : null,
+      alternatives:
+          json['alternatives'] != null
+              ? List<String>.from(json['alternatives'] as List)
+              : const [],
     );
   }
 
@@ -192,14 +199,15 @@ class ExtractedField {
     return {
       'value': value,
       'confidence': confidence,
-      'boundingBox': boundingBox != null
-          ? {
-              'left': boundingBox!.left,
-              'top': boundingBox!.top,
-              'width': boundingBox!.width,
-              'height': boundingBox!.height,
-            }
-          : null,
+      'boundingBox':
+          boundingBox != null
+              ? {
+                'left': boundingBox!.left,
+                'top': boundingBox!.top,
+                'width': boundingBox!.width,
+                'height': boundingBox!.height,
+              }
+              : null,
       'alternatives': alternatives,
     };
   }
@@ -246,4 +254,3 @@ class DocumentValidationResult {
   final List<String> warnings;
   final Map<DocumentFieldType, String> suggestedCorrections;
 }
-

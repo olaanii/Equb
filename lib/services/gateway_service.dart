@@ -67,7 +67,10 @@ PaymentGatewayConfig _fromRtdb(String id, Map<String, dynamic> m) {
   } else if (rawMeta is String && rawMeta.trim().isNotEmpty) {
     try {
       final decoded = jsonDecode(rawMeta);
-      meta = decoded is Map ? Map<String, dynamic>.from(decoded) : <String, dynamic>{};
+      meta =
+          decoded is Map
+              ? Map<String, dynamic>.from(decoded)
+              : <String, dynamic>{};
     } catch (_) {
       meta = <String, dynamic>{};
     }
@@ -77,9 +80,10 @@ PaymentGatewayConfig _fromRtdb(String id, Map<String, dynamic> m) {
 
   return PaymentGatewayConfig(
     id: id,
-    name: (m['name'] as String?)?.trim().isNotEmpty == true
-        ? (m['name'] as String)
-        : id,
+    name:
+        (m['name'] as String?)?.trim().isNotEmpty == true
+            ? (m['name'] as String)
+            : id,
     enabled: (m['enabled'] as bool?) ?? false,
     meta: meta,
     environment: (m['environment'] as String?) ?? 'mock',
@@ -161,7 +165,9 @@ class GatewayService {
         .toList(growable: false);
   }
 
-  Future<List<PaymentGatewayConfig>> getEnabledGateways({FeatureFlags? flags}) async {
+  Future<List<PaymentGatewayConfig>> getEnabledGateways({
+    FeatureFlags? flags,
+  }) async {
     final gateways = await listGateways(flags: flags);
     return gateways.where((g) => g.enabled).toList(growable: false);
   }
@@ -198,9 +204,10 @@ class GatewayService {
         final value = entry.value;
         if (value is! Map) continue;
         final map = Map<String, dynamic>.from(value);
-        final id = (map['id'] as String?)?.trim().isNotEmpty == true
-            ? (map['id'] as String)
-            : entry.key.toString();
+        final id =
+            (map['id'] as String?)?.trim().isNotEmpty == true
+                ? (map['id'] as String)
+                : entry.key.toString();
         out.add(_fromRtdb(id, map));
       }
       return out;

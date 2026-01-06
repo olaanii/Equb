@@ -30,8 +30,9 @@ class TelebirrImpl implements PaymentService {
          authUrl: authUrl,
          authClientId: authClientId,
          authClientSecret: authClientSecret,
-          authHeaders: authHeaders ?? const <String, String>{},
-          authPayloadOverrides: authPayloadOverrides ?? const <String, dynamic>{},
+         authHeaders: authHeaders ?? const <String, String>{},
+         authPayloadOverrides:
+             authPayloadOverrides ?? const <String, dynamic>{},
          authGrantType: authGrantType,
          tokenFieldOverride: tokenFieldOverride,
          expiresInFieldOverride: expiresInFieldOverride,

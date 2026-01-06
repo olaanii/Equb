@@ -22,7 +22,8 @@ class RtdbWalletRepository implements WalletRepository {
 
   DatabaseReference _userRef(String userId) => _usersRef.child(userId);
 
-  DatabaseReference _txRef(String userId) => _userRef(userId).child('transactions');
+  DatabaseReference _txRef(String userId) =>
+      _userRef(userId).child('transactions');
 
   Future<void> approvePendingDeposit(String userId, String txId) async {
     try {
@@ -250,7 +251,10 @@ class RtdbWalletRepository implements WalletRepository {
 
       final txId = _txRef(userId).push().key;
       if (txId == null || txId.isEmpty) {
-        throw RepositoryException(code: 'id-generation-failed', message: 'Failed to generate transaction id');
+        throw RepositoryException(
+          code: 'id-generation-failed',
+          message: 'Failed to generate transaction id',
+        );
       }
 
       final tx = TransactionModel(
@@ -258,7 +262,8 @@ class RtdbWalletRepository implements WalletRepository {
         fromUserId: userId,
         toUserId: 'wallet',
         amount: amount,
-        status: isManual ? TransactionStatus.pending : TransactionStatus.success,
+        status:
+            isManual ? TransactionStatus.pending : TransactionStatus.success,
         gateway: gateway,
         timestamp: DateTime.now(),
         feeAmount: fee,
@@ -267,14 +272,16 @@ class RtdbWalletRepository implements WalletRepository {
       );
 
       final nowMs = ServerValue.timestamp;
-      final payload = tx.toJson()
-        ..['timestampMs'] = nowMs
-        ..['requiresReview'] = isManual;
+      final payload =
+          tx.toJson()
+            ..['timestampMs'] = nowMs
+            ..['requiresReview'] = isManual;
 
       final notificationId = _userRef(userId).child('notifications').push().key;
-      final pointsLedgerId = !isManual && points > 0
-          ? _userRef(userId).child('points_ledger').push().key
-          : null;
+      final pointsLedgerId =
+          !isManual && points > 0
+              ? _userRef(userId).child('points_ledger').push().key
+              : null;
 
       final result = await _userRef(userId).runTransaction((currentData) {
         if (currentData == null || currentData is! Map) {
@@ -282,23 +289,27 @@ class RtdbWalletRepository implements WalletRepository {
         }
 
         final data = Map<String, dynamic>.from(currentData);
-        final currentBalance = (data['walletBalance'] as num?)?.toDouble() ?? 0.0;
+        final currentBalance =
+            (data['walletBalance'] as num?)?.toDouble() ?? 0.0;
         final currentPoints = (data['points'] as int?) ?? 0;
 
-        final updatedBalance = isManual ? currentBalance : (currentBalance + net);
+        final updatedBalance =
+            isManual ? currentBalance : (currentBalance + net);
         final updatedPoints =
             isManual ? currentPoints : (currentPoints + points);
 
         data['walletBalance'] = updatedBalance;
         data['points'] = updatedPoints;
 
-        final transactions = (data['transactions'] as Map?)?.cast<String, dynamic>() ??
+        final transactions =
+            (data['transactions'] as Map?)?.cast<String, dynamic>() ??
             <String, dynamic>{};
         transactions[txId] = payload;
         data['transactions'] = transactions;
 
         if (pointsLedgerId != null) {
-          final ledger = (data['points_ledger'] as Map?)?.cast<String, dynamic>() ??
+          final ledger =
+              (data['points_ledger'] as Map?)?.cast<String, dynamic>() ??
               <String, dynamic>{};
           ledger[pointsLedgerId] = <String, dynamic>{
             'delta': points,
@@ -319,7 +330,7 @@ class RtdbWalletRepository implements WalletRepository {
         if (notificationId != null) {
           final notifications =
               (data['notifications'] as Map?)?.cast<String, dynamic>() ??
-                  <String, dynamic>{};
+              <String, dynamic>{};
 
           notifications[notificationId] = <String, dynamic>{
             'id': notificationId,
@@ -350,7 +361,10 @@ class RtdbWalletRepository implements WalletRepository {
       });
 
       if (!result.committed) {
-        throw RepositoryException(code: 'user-not-found', message: 'User $userId not found');
+        throw RepositoryException(
+          code: 'user-not-found',
+          message: 'User $userId not found',
+        );
       }
 
       // For manual deposits, also enqueue for admin review.
@@ -389,7 +403,11 @@ class RtdbWalletRepository implements WalletRepository {
         context: {'userId': userId, 'error': e.toString()},
       );
       if (e is RepositoryException) rethrow;
-      throw RepositoryException(code: 'deposit-failed', message: 'Deposit failed', cause: e);
+      throw RepositoryException(
+        code: 'deposit-failed',
+        message: 'Deposit failed',
+        cause: e,
+      );
     }
   }
 
@@ -419,11 +437,18 @@ class RtdbWalletRepository implements WalletRepository {
   }
 
   @override
-  Future<void> withdraw(String userId, double amount, String destination) async {
+  Future<void> withdraw(
+    String userId,
+    double amount,
+    String destination,
+  ) async {
     try {
       final txId = _txRef(userId).push().key;
       if (txId == null || txId.isEmpty) {
-        throw RepositoryException(code: 'id-generation-failed', message: 'Failed to generate transaction id');
+        throw RepositoryException(
+          code: 'id-generation-failed',
+          message: 'Failed to generate transaction id',
+        );
       }
 
       final tx = TransactionModel(
@@ -447,7 +472,8 @@ class RtdbWalletRepository implements WalletRepository {
         }
 
         final data = Map<String, dynamic>.from(currentData);
-        final currentBalance = (data['walletBalance'] as num?)?.toDouble() ?? 0.0;
+        final currentBalance =
+            (data['walletBalance'] as num?)?.toDouble() ?? 0.0;
         if (currentBalance + 1e-9 < amount) {
           // Abort so callers see a non-committed result.
           return Transaction.abort();
@@ -455,7 +481,8 @@ class RtdbWalletRepository implements WalletRepository {
 
         data['walletBalance'] = currentBalance - amount;
 
-        final transactions = (data['transactions'] as Map?)?.cast<String, dynamic>() ??
+        final transactions =
+            (data['transactions'] as Map?)?.cast<String, dynamic>() ??
             <String, dynamic>{};
         transactions[txId] = payload;
         data['transactions'] = transactions;
@@ -463,7 +490,7 @@ class RtdbWalletRepository implements WalletRepository {
         if (notificationId != null) {
           final notifications =
               (data['notifications'] as Map?)?.cast<String, dynamic>() ??
-                  <String, dynamic>{};
+              <String, dynamic>{};
 
           notifications[notificationId] = <String, dynamic>{
             'id': notificationId,
@@ -493,9 +520,15 @@ class RtdbWalletRepository implements WalletRepository {
         // Re-check quickly for clearer error.
         final snapshot = await _userRef(userId).get();
         if (!snapshot.exists || snapshot.value == null) {
-          throw RepositoryException(code: 'user-not-found', message: 'User $userId not found');
+          throw RepositoryException(
+            code: 'user-not-found',
+            message: 'User $userId not found',
+          );
         }
-        throw RepositoryException(code: 'insufficient-funds', message: 'Insufficient funds');
+        throw RepositoryException(
+          code: 'insufficient-funds',
+          message: 'Insufficient funds',
+        );
       }
     } catch (e) {
       _logService?.log(
@@ -505,7 +538,11 @@ class RtdbWalletRepository implements WalletRepository {
         context: {'userId': userId, 'error': e.toString()},
       );
       if (e is RepositoryException) rethrow;
-      throw RepositoryException(code: 'withdraw-failed', message: 'Withdraw failed', cause: e);
+      throw RepositoryException(
+        code: 'withdraw-failed',
+        message: 'Withdraw failed',
+        cause: e,
+      );
     }
   }
 
@@ -529,7 +566,11 @@ class RtdbWalletRepository implements WalletRepository {
       txs.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       return txs;
     } catch (e) {
-      throw RepositoryException(code: 'get-failed', message: 'Unable to fetch transactions', cause: e);
+      throw RepositoryException(
+        code: 'get-failed',
+        message: 'Unable to fetch transactions',
+        cause: e,
+      );
     }
   }
 
@@ -558,9 +599,15 @@ class RtdbWalletRepository implements WalletRepository {
     return _userRef(userId).onValue.map((event) {
       final raw = event.snapshot.value;
       if (raw == null || raw is! Map) {
-        throw RepositoryException(code: 'user-not-found', message: 'User $userId not found');
+        throw RepositoryException(
+          code: 'user-not-found',
+          message: 'User $userId not found',
+        );
       }
-      return UserModel.fromJson({...Map<String, dynamic>.from(raw), 'id': userId});
+      return UserModel.fromJson({
+        ...Map<String, dynamic>.from(raw),
+        'id': userId,
+      });
     });
   }
 }

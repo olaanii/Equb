@@ -10,9 +10,7 @@ import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
 class IdScanService {
-  IdScanService({
-    required this.logService,
-  }) {
+  IdScanService({required this.logService}) {
     _textRecognizer = GoogleMlKit.vision.textRecognizer();
   }
 
@@ -218,9 +216,11 @@ class IdScanService {
     // Ethiopian National ID patterns
     if (fullText.contains('federal democratic republic of ethiopia') ||
         fullText.contains('የኢትዮጵያ ፌዴራላዊ ዲሞክራሲያዊ ሪፐብሊክ')) {
-
       // Extract full name
-      final namePattern = RegExp(r'name[:\s]*([A-Za-z\s]+)', caseSensitive: false);
+      final namePattern = RegExp(
+        r'name[:\s]*([A-Za-z\s]+)',
+        caseSensitive: false,
+      );
       final nameMatch = namePattern.firstMatch(fullText);
       if (nameMatch != null) {
         fields[DocumentFieldType.fullName] = ExtractedField(
@@ -240,7 +240,10 @@ class IdScanService {
       }
 
       // Extract date of birth
-      final dobPattern = RegExp(r'(?:dob|birth)[:\s]*(\d{2}[-/]\d{2}[-/]\d{4})', caseSensitive: false);
+      final dobPattern = RegExp(
+        r'(?:dob|birth)[:\s]*(\d{2}[-/]\d{2}[-/]\d{4})',
+        caseSensitive: false,
+      );
       final dobMatch = dobPattern.firstMatch(fullText);
       if (dobMatch != null) {
         fields[DocumentFieldType.dateOfBirth] = ExtractedField(
@@ -268,10 +271,15 @@ class IdScanService {
     return match?.group(1) ?? '';
   }
 
-  double _calculateOverallConfidence(Map<DocumentFieldType, ExtractedField> fields) {
+  double _calculateOverallConfidence(
+    Map<DocumentFieldType, ExtractedField> fields,
+  ) {
     if (fields.isEmpty) return 0.0;
 
-    final totalConfidence = fields.values.fold<double>(0, (sum, field) => sum + field.confidence);
+    final totalConfidence = fields.values.fold<double>(
+      0,
+      (sum, field) => sum + field.confidence,
+    );
     return totalConfidence / fields.length;
   }
 
@@ -303,12 +311,15 @@ class IdScanService {
     // Check confidence levels
     for (final entry in scanResult.detectedFields.entries) {
       if (entry.value.confidence < 0.6) {
-        warnings.add('${entry.key.toString().split('.').last} has low confidence (${(entry.value.confidence * 100).round()}%)');
+        warnings.add(
+          '${entry.key.toString().split('.').last} has low confidence (${(entry.value.confidence * 100).round()}%)',
+        );
       }
     }
 
     // Validate ID number format
-    final idNumber = scanResult.detectedFields[DocumentFieldType.idNumber]?.value;
+    final idNumber =
+        scanResult.detectedFields[DocumentFieldType.idNumber]?.value;
     if (idNumber != null && !_isValidIdFormat(idNumber)) {
       corrections[DocumentFieldType.idNumber] = 'ID format appears invalid';
     }
@@ -337,4 +348,3 @@ class IdScanService {
     );
   }
 }
-
