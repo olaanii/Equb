@@ -10,6 +10,10 @@ class OnboardingService {
 
   static const String _collection = 'user_onboarding';
 
+  bool _isPermissionDenied(Object e) {
+    return e is FirebaseException && e.code == 'permission-denied';
+  }
+
   /// Save onboarding data for a user
   Future<void> saveOnboardingData(String userId, OnboardingData data) async {
     try {
@@ -29,6 +33,17 @@ class OnboardingService {
         },
       );
     } catch (e) {
+      if (_isPermissionDenied(e)) {
+        // Don't crash the app in environments where Firestore rules are not
+        // configured for this collection yet.
+        logService.log(
+          LogLevel.warning,
+          'onboarding_save_denied',
+          'Permission denied saving onboarding data; continuing without persistence',
+          context: {'userId': userId, 'error': e.toString()},
+        );
+        return;
+      }
       logService.log(
         LogLevel.error,
         'onboarding_save_failed',
@@ -50,6 +65,15 @@ class OnboardingService {
 
       return OnboardingData.fromJson(doc.data()!);
     } catch (e) {
+      if (_isPermissionDenied(e)) {
+        logService.log(
+          LogLevel.warning,
+          'onboarding_load_denied',
+          'Permission denied loading onboarding data; using defaults',
+          context: {'userId': userId, 'error': e.toString()},
+        );
+        return null;
+      }
       logService.log(
         LogLevel.error,
         'onboarding_load_failed',
@@ -98,10 +122,10 @@ class OnboardingService {
       await saveOnboardingData(userId, completedData);
 
       // Update user document to mark onboarding as complete
-      await firestore.collection('users').doc(userId).update({
+      await firestore.collection('users').doc(userId).set({
         'onboardingCompleted': true,
         'onboardingCompletedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
 
       logService.log(
         LogLevel.info,
@@ -110,6 +134,15 @@ class OnboardingService {
         context: {'userId': userId},
       );
     } catch (e) {
+      if (_isPermissionDenied(e)) {
+        logService.log(
+          LogLevel.warning,
+          'onboarding_complete_denied',
+          'Permission denied completing onboarding; allowing user to proceed',
+          context: {'userId': userId, 'error': e.toString()},
+        );
+        return;
+      }
       logService.log(
         LogLevel.error,
         'onboarding_completion_failed',
@@ -182,6 +215,16 @@ class OnboardingService {
 
       return !onboardingCompleted;
     } catch (e) {
+      if (_isPermissionDenied(e)) {
+        // If rules deny reads, don't trap the user in onboarding forever.
+        logService.log(
+          LogLevel.warning,
+          'onboarding_check_denied',
+          'Permission denied checking onboarding; defaulting to not required',
+          context: {'userId': userId, 'error': e.toString()},
+        );
+        return false;
+      }
       logService.log(
         LogLevel.error,
         'onboarding_check_failed',

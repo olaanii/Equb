@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:equb/models/onboarding_state.dart';
 import 'package:equb/providers/providers.dart';
 import 'package:equb/ui/screens/onboarding/steps/document_upload_step.dart';
@@ -7,6 +9,7 @@ import 'package:equb/ui/screens/onboarding/steps/phone_verification_step.dart';
 import 'package:equb/ui/screens/onboarding/steps/profile_setup_step.dart';
 import 'package:equb/ui/screens/onboarding/steps/welcome_step.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,6 +24,10 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
   OnboardingData _onboardingData = const OnboardingData();
   bool _isLoading = true;
 
+  String? _currentUserId() {
+    return FirebaseAuth.instance.currentUser?.uid;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -28,11 +35,16 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
   }
 
   Future<void> _loadOnboardingData() async {
-    final user = ref.read(currentUserProvider).value;
-    if (user == null) return;
+    final uid = _currentUserId();
+    if (uid == null) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+      return;
+    }
 
     final onboardingService = ref.read(onboardingServiceProvider);
-    final data = await onboardingService.loadOnboardingData(user.id);
+    final data = await onboardingService.loadOnboardingData(uid);
 
     if (mounted) {
       setState(() {
@@ -43,16 +55,28 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
   }
 
   Future<void> _saveOnboardingData() async {
-    final user = ref.read(currentUserProvider).value;
-    if (user == null) return;
+    final uid = _currentUserId();
+    if (uid == null) return;
 
     final onboardingService = ref.read(onboardingServiceProvider);
-    await onboardingService.saveOnboardingData(user.id, _onboardingData);
+    await onboardingService.saveOnboardingData(uid, _onboardingData);
   }
 
   void _updateData(OnboardingData newData) {
     setState(() => _onboardingData = newData);
-    _saveOnboardingData();
+    // Never let persistence errors crash the UI.
+    unawaited(_saveOnboardingData());
+  }
+
+  Future<void> _skipOnboardingFromWelcome() async {
+    final uid = _currentUserId();
+    if (uid == null) return;
+
+    final onboardingService = ref.read(onboardingServiceProvider);
+    await onboardingService.completeOnboarding(uid);
+
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil('/', (r) => false);
   }
 
   void _nextStep() {
@@ -72,25 +96,25 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
   }
 
   void _skipStep() {
-    final user = ref.read(currentUserProvider).value;
-    if (user == null) return;
+    final uid = _currentUserId();
+    if (uid == null) return;
 
     final onboardingService = ref.read(onboardingServiceProvider);
-    onboardingService.skipStep(user.id, _onboardingData.currentStep).then((_) {
+    onboardingService.skipStep(uid, _onboardingData.currentStep).then((_) {
       _nextStep();
     });
   }
 
   Future<void> _completeOnboarding() async {
-    final user = ref.read(currentUserProvider).value;
-    if (user == null) return;
+    final uid = _currentUserId();
+    if (uid == null) return;
 
     final onboardingService = ref.read(onboardingServiceProvider);
-    await onboardingService.completeOnboarding(user.id);
+    await onboardingService.completeOnboarding(uid);
 
     if (mounted) {
-      // Navigate to main app
-      Navigator.of(context).pushReplacementNamed('/home');
+      // Navigate back to app root; AuthWrapper will take user to HomeShell.
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (r) => false);
     }
   }
 
@@ -178,6 +202,7 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
       case OnboardingStep.welcome:
         return WelcomeStep(
           onNext: _nextStep,
+          onSkip: _skipOnboardingFromWelcome,
         );
       case OnboardingStep.profileSetup:
         return ProfileSetupStep(

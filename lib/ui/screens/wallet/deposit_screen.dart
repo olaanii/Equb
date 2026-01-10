@@ -1,18 +1,21 @@
+import 'package:equb/providers/providers.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:equb/ui/screens/shared/widgets.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
 
-class DepositScreen extends StatefulWidget {
+class DepositScreen extends ConsumerStatefulWidget {
   const DepositScreen({super.key});
 
   @override
-  State<DepositScreen> createState() => _DepositScreenState();
+  ConsumerState<DepositScreen> createState() => _DepositScreenState();
 }
 
-class _DepositScreenState extends State<DepositScreen> {
+class _DepositScreenState extends ConsumerState<DepositScreen> {
   final TextEditingController _amountController = TextEditingController();
   int _method = 1;
+  bool _submitting = false;
 
   @override
   void dispose() {
@@ -61,22 +64,12 @@ class _DepositScreenState extends State<DepositScreen> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 RadioListTile<int>(
-                  title: const Text('Telebirr'),
+                  title: const Text('FenanPay (Test)'),
                   subtitle: Text(
-                    'Instant mobile payment',
+                    'Hosted checkout (sandbox)',
                     style: theme.textTheme.bodySmall,
                   ),
                   value: 1,
-                  groupValue: _method,
-                  onChanged: (value) => setState(() => _method = value ?? 1),
-                ),
-                RadioListTile<int>(
-                  title: const Text('CBE Birr'),
-                  subtitle: Text(
-                    'Bank transfer • settlement ~5m',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  value: 2,
                   groupValue: _method,
                   onChanged: (value) => setState(() => _method = value ?? 1),
                 ),
@@ -96,24 +89,88 @@ class _DepositScreenState extends State<DepositScreen> {
                 const SizedBox(height: AppSpacing.sm),
                 _SummaryRow(
                   label: 'Fees',
-                  value: _method == 1 ? 'ETB 0.00' : 'ETB 5.00',
+                  value: 'ETB 0.00',
                 ),
                 _SummaryRow(
                   label: 'ETA',
-                  value: _method == 1 ? 'Instant' : '5-10 min',
+                  value: 'Instant',
                 ),
                 _SummaryRow(
                   label: 'Destination',
-                  value: _method == 1 ? 'Wallet credit' : 'CBE Birr account',
+                  value: 'Wallet credit',
                 ),
               ],
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          PrimaryButton(label: 'Proceed to pay', onPressed: () {}),
+          PrimaryButton(
+            label: _submitting ? 'Starting checkout…' : 'Proceed to pay',
+            onPressed: _submitting ? null : _handlePay,
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _handlePay() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final raw = _amountController.text.trim();
+    final amount = double.tryParse(raw);
+    if (amount == null || amount < 1) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Enter a valid amount (min ETB 1).')),
+      );
+      return;
+    }
+
+    final uid = ref.read(currentUserProvider).value?.id;
+    if (uid == null || uid.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Sign in required.')),
+      );
+      return;
+    }
+
+    setState(() => _submitting = true);
+    try {
+      final gatewayService = ref.read(gatewayServiceProvider);
+      final paymentService = await gatewayService.getAdapter('fenanpay');
+      if (paymentService == null) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('FenanPay gateway is not configured.')),
+        );
+        return;
+      }
+
+      if (!context.mounted) return;
+
+      await paymentService.createPayment(
+        fromUserId: uid,
+        toUserId: uid,
+        amount: amount,
+        gateway: 'fenanpay',
+        context: context,
+      );
+
+      if (!context.mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Checkout opened. Awaiting confirmation.'),
+        ),
+      );
+    } on GatewayCredentialException catch (err) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('FenanPay API key missing: ${err.message}')),
+      );
+    } catch (err) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Deposit error: $err')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
+    }
   }
 }
 

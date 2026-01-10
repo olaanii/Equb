@@ -1,11 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:equb/models/notification_preferences.dart';
-import 'package:equb/models/notification_reminder.dart';
-import 'package:equb/models/user_model.dart';
 import 'package:equb/services/system_log_service.dart';
 
 class PushNotificationScheduler {
@@ -22,7 +19,11 @@ class PushNotificationScheduler {
   /// Schedule contribution reminders for all active groups
   Future<void> scheduleContributionReminders() async {
     try {
-      logService.log(LogLevel.info, 'push_scheduler', 'Starting contribution reminder scheduling');
+      logService.log(
+        LogLevel.info,
+        'push_scheduler',
+        'Starting contribution reminder scheduling',
+      );
 
       // Get all active groups
       final groupsSnapshot = await firestore.collection('groups').get();
@@ -57,29 +58,44 @@ class PushNotificationScheduler {
         }
       }
 
-      logService.log(LogLevel.info, 'push_scheduler', 'Contribution reminder scheduling completed');
+      logService.log(
+        LogLevel.info,
+        'push_scheduler',
+        'Contribution reminder scheduling completed',
+      );
     } catch (e) {
-      logService.log(LogLevel.error, 'push_scheduler', 'Failed to schedule contribution reminders', context: {'error': e.toString()});
+      logService.log(
+        LogLevel.error,
+        'push_scheduler',
+        'Failed to schedule contribution reminders',
+        context: {'error': e.toString()},
+      );
     }
   }
 
   /// Schedule payout notifications for upcoming payouts
   Future<void> schedulePayoutNotifications() async {
     try {
-      logService.log(LogLevel.info, 'push_scheduler', 'Starting payout notification scheduling');
+      logService.log(
+        LogLevel.info,
+        'push_scheduler',
+        'Starting payout notification scheduling',
+      );
 
       // Get pending payouts from the payout_schedules collection
-      final payoutsSnapshot = await firestore
-          .collection('payout_schedules')
-          .where('status', isEqualTo: 'scheduled')
-          .where('scheduledDate', isGreaterThan: DateTime.now())
-          .get();
+      final payoutsSnapshot =
+          await firestore
+              .collection('payout_schedules')
+              .where('status', isEqualTo: 'scheduled')
+              .where('scheduledDate', isGreaterThan: DateTime.now())
+              .get();
 
       for (final payoutDoc in payoutsSnapshot.docs) {
         final payoutData = payoutDoc.data();
         final recipientId = payoutData['recipientId'] as String?;
         final amount = payoutData['amount'] as num? ?? 0;
-        final scheduledDate = (payoutData['scheduledDate'] as Timestamp?)?.toDate();
+        final scheduledDate =
+            (payoutData['scheduledDate'] as Timestamp?)?.toDate();
 
         if (recipientId == null || scheduledDate == null) continue;
 
@@ -90,9 +106,18 @@ class PushNotificationScheduler {
         );
       }
 
-      logService.log(LogLevel.info, 'push_scheduler', 'Payout notification scheduling completed');
+      logService.log(
+        LogLevel.info,
+        'push_scheduler',
+        'Payout notification scheduling completed',
+      );
     } catch (e) {
-      logService.log(LogLevel.error, 'push_scheduler', 'Failed to schedule payout notifications', context: {'error': e.toString()});
+      logService.log(
+        LogLevel.error,
+        'push_scheduler',
+        'Failed to schedule payout notifications',
+        context: {'error': e.toString()},
+      );
     }
   }
 
@@ -110,7 +135,9 @@ class PushNotificationScheduler {
       if (!userPrefs.contributionRemindersEnabled) return;
 
       // Calculate reminder time (default 24 hours before)
-      final reminderTime = nextPayout.subtract(Duration(hours: userPrefs.reminderLeadTimeHours));
+      final reminderTime = nextPayout.subtract(
+        Duration(hours: userPrefs.reminderLeadTimeHours),
+      );
       final now = DateTime.now();
 
       // Don't schedule if reminder time is in the past
@@ -129,7 +156,8 @@ class PushNotificationScheduler {
       await _schedulePushNotification(
         userId: userId,
         title: 'Contribution Reminder',
-        body: 'Your contribution of ETB ${amount.toStringAsFixed(0)} for $groupName is due soon',
+        body:
+            'Your contribution of ETB ${amount.toStringAsFixed(0)} for $groupName is due soon',
         scheduledTime: reminderTime,
         notificationType: 'contribution_reminder',
         data: {
@@ -139,10 +167,13 @@ class PushNotificationScheduler {
           'type': 'contribution_reminder',
         },
       );
-
     } catch (e) {
-      logService.log(LogLevel.error, 'push_scheduler', 'Failed to schedule member contribution reminder',
-        context: {'userId': userId, 'groupId': groupId, 'error': e.toString()});
+      logService.log(
+        LogLevel.error,
+        'push_scheduler',
+        'Failed to schedule member contribution reminder',
+        context: {'userId': userId, 'groupId': groupId, 'error': e.toString()},
+      );
     }
   }
 
@@ -177,7 +208,8 @@ class PushNotificationScheduler {
       await _schedulePushNotification(
         userId: userId,
         title: 'Payout Notification',
-        body: 'Your payout of ETB ${amount.toStringAsFixed(0)} is scheduled for tomorrow',
+        body:
+            'Your payout of ETB ${amount.toStringAsFixed(0)} is scheduled for tomorrow',
         scheduledTime: reminderTime,
         notificationType: 'payout_notification',
         data: {
@@ -186,10 +218,13 @@ class PushNotificationScheduler {
           'type': 'payout_notification',
         },
       );
-
     } catch (e) {
-      logService.log(LogLevel.error, 'push_scheduler', 'Failed to schedule payout notification',
-        context: {'userId': userId, 'error': e.toString()});
+      logService.log(
+        LogLevel.error,
+        'push_scheduler',
+        'Failed to schedule payout notification',
+        context: {'userId': userId, 'error': e.toString()},
+      );
     }
   }
 
@@ -214,24 +249,37 @@ class PushNotificationScheduler {
         'data': data ?? {},
       });
 
-      logService.log(LogLevel.info, 'push_scheduler', 'Push notification scheduled',
+      logService.log(
+        LogLevel.info,
+        'push_scheduler',
+        'Push notification scheduled',
         context: {
           'userId': userId,
           'type': notificationType,
           'scheduledTime': scheduledTime.toIso8601String(),
-        });
-
+        },
+      );
     } catch (e) {
-      logService.log(LogLevel.error, 'push_scheduler', 'Failed to schedule push notification',
-        context: {'userId': userId, 'error': e.toString()});
+      logService.log(
+        LogLevel.error,
+        'push_scheduler',
+        'Failed to schedule push notification',
+        context: {'userId': userId, 'error': e.toString()},
+      );
       rethrow;
     }
   }
 
   /// Get user's notification preferences
-  Future<NotificationPreferences> _getUserNotificationPreferences(String userId) async {
+  Future<NotificationPreferences> _getUserNotificationPreferences(
+    String userId,
+  ) async {
     try {
-      final doc = await firestore.collection('user_notification_preferences').doc(userId).get();
+      final doc =
+          await firestore
+              .collection('user_notification_preferences')
+              .doc(userId)
+              .get();
 
       if (doc.exists) {
         final data = doc.data()!;
@@ -241,24 +289,39 @@ class PushNotificationScheduler {
       // Return default preferences
       return const NotificationPreferences();
     } catch (e) {
-      logService.log(LogLevel.warning, 'push_scheduler', 'Failed to get user notification preferences, using defaults',
-        context: {'userId': userId, 'error': e.toString()});
+      logService.log(
+        LogLevel.warning,
+        'push_scheduler',
+        'Failed to get user notification preferences, using defaults',
+        context: {'userId': userId, 'error': e.toString()},
+      );
       return const NotificationPreferences();
     }
   }
 
   /// Check if a notification of the same type already exists for the given time window
-  Future<bool> _checkExistingNotification(String userId, String notificationId, DateTime scheduledTime) async {
+  Future<bool> _checkExistingNotification(
+    String userId,
+    String notificationId,
+    DateTime scheduledTime,
+  ) async {
     try {
       // Check scheduled notifications collection
-      final query = await firestore
-          .collection('scheduled_notifications')
-          .where('userId', isEqualTo: userId)
-          .where('notificationId', isEqualTo: notificationId)
-          .where('scheduledTime', isGreaterThan: scheduledTime.subtract(const Duration(hours: 1)))
-          .where('scheduledTime', isLessThan: scheduledTime.add(const Duration(hours: 1)))
-          .limit(1)
-          .get();
+      final query =
+          await firestore
+              .collection('scheduled_notifications')
+              .where('userId', isEqualTo: userId)
+              .where('notificationId', isEqualTo: notificationId)
+              .where(
+                'scheduledTime',
+                isGreaterThan: scheduledTime.subtract(const Duration(hours: 1)),
+              )
+              .where(
+                'scheduledTime',
+                isLessThan: scheduledTime.add(const Duration(hours: 1)),
+              )
+              .limit(1)
+              .get();
 
       return query.docs.isNotEmpty;
     } catch (e) {
@@ -268,7 +331,10 @@ class PushNotificationScheduler {
   }
 
   /// Cancel scheduled notifications for a user
-  Future<void> cancelUserNotifications(String userId, {String? notificationType}) async {
+  Future<void> cancelUserNotifications(
+    String userId, {
+    String? notificationType,
+  }) async {
     try {
       final callable = functions.httpsCallable('cancelScheduledNotifications');
 
@@ -277,12 +343,19 @@ class PushNotificationScheduler {
         'notificationType': notificationType,
       });
 
-      logService.log(LogLevel.info, 'push_scheduler', 'User notifications cancelled',
-        context: {'userId': userId, 'type': notificationType});
-
+      logService.log(
+        LogLevel.info,
+        'push_scheduler',
+        'User notifications cancelled',
+        context: {'userId': userId, 'type': notificationType},
+      );
     } catch (e) {
-      logService.log(LogLevel.error, 'push_scheduler', 'Failed to cancel user notifications',
-        context: {'userId': userId, 'error': e.toString()});
+      logService.log(
+        LogLevel.error,
+        'push_scheduler',
+        'Failed to cancel user notifications',
+        context: {'userId': userId, 'error': e.toString()},
+      );
     }
   }
 
@@ -305,14 +378,20 @@ class PushNotificationScheduler {
         'data': data ?? {},
       });
 
-      logService.log(LogLevel.info, 'push_scheduler', 'Immediate notification sent',
-        context: {'userId': userId, 'type': notificationType});
-
+      logService.log(
+        LogLevel.info,
+        'push_scheduler',
+        'Immediate notification sent',
+        context: {'userId': userId, 'type': notificationType},
+      );
     } catch (e) {
-      logService.log(LogLevel.error, 'push_scheduler', 'Failed to send immediate notification',
-        context: {'userId': userId, 'error': e.toString()});
+      logService.log(
+        LogLevel.error,
+        'push_scheduler',
+        'Failed to send immediate notification',
+        context: {'userId': userId, 'error': e.toString()},
+      );
       rethrow;
     }
   }
 }
-

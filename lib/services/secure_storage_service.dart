@@ -20,6 +20,9 @@ class GatewaySecretBundle {
     this.cbeClientId,
     this.cbeClientSecret,
     this.bankSettlementWebhook,
+    this.fenanPayApiKey,
+    this.fenanPayDepositKey,
+    this.fenanPayWithdrawalKey,
   });
 
   final String? telebirrApiKey;
@@ -29,6 +32,9 @@ class GatewaySecretBundle {
   final String? cbeClientId;
   final String? cbeClientSecret;
   final String? bankSettlementWebhook;
+  final String? fenanPayApiKey;
+  final String? fenanPayDepositKey;
+  final String? fenanPayWithdrawalKey;
 }
 
 abstract class GatewaySecretStore {
@@ -50,6 +56,10 @@ class SecureGatewaySecretStore implements GatewaySecretStore {
       _storage.read('gateway.cbe.clientId'),
       _storage.read('gateway.cbe.clientSecret'),
       _storage.read('gateway.bank.webhook'),
+      // FenanPay (backwards compatible)
+      _storage.read('gateway.fenanpay.apiKey'),
+      _storage.read('gateway.fenanpay.depositKey'),
+      _storage.read('gateway.fenanpay.withdrawalKey'),
     ]);
 
     return GatewaySecretBundle(
@@ -60,6 +70,9 @@ class SecureGatewaySecretStore implements GatewaySecretStore {
       cbeClientId: values[4],
       cbeClientSecret: values[5],
       bankSettlementWebhook: values[6],
+      fenanPayApiKey: values[7],
+      fenanPayDepositKey: values[8],
+      fenanPayWithdrawalKey: values[9],
     );
   }
 }

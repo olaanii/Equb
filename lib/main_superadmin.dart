@@ -1,8 +1,10 @@
 import 'package:equb/providers/app_providers.dart';
+import 'package:equb/services/secure_storage_service.dart';
 import 'package:equb/ui/superadmin_portal/superadmin_portal_entry.dart';
 import 'package:equb/ui/theme/app_theme.dart';
 import 'package:equb/services/notification_service.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -13,6 +15,10 @@ import 'firebase_options.dart';
 /// Run with: `flutter run -d chrome -t lib/main_superadmin.dart`
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (!kReleaseMode) {
+    await _bootstrapGatewaySecretsFromDartDefines();
+  }
 
   bool firebaseInitialized = false;
   String? firebaseError;
@@ -41,6 +47,41 @@ Future<void> main() async {
       ),
     ),
   );
+}
+
+Future<void> _bootstrapGatewaySecretsFromDartDefines() async {
+  // These are provided at runtime, e.g.:
+  // flutter run -d chrome -t lib/main_superadmin.dart \
+  //   "--dart-define=FENANPAY_DEPOSIT_KEY=..." \
+  //   "--dart-define=FENANPAY_WITHDRAWAL_KEY=..."
+  const depositKey = String.fromEnvironment('FENANPAY_DEPOSIT_KEY');
+  const withdrawalKey = String.fromEnvironment('FENANPAY_WITHDRAWAL_KEY');
+
+  final storage = SecureStorageService();
+
+  final hasDeposit = depositKey.trim().isNotEmpty;
+  final hasWithdrawal = withdrawalKey.trim().isNotEmpty;
+  if (!hasDeposit && !hasWithdrawal) {
+    return;
+  }
+
+  try {
+    if (hasDeposit) {
+      await storage.write('gateway.fenanpay.depositKey', depositKey.trim());
+      // Backwards compatibility for older meta injection logic.
+      await storage.write('gateway.fenanpay.apiKey', depositKey.trim());
+      debugPrint('Stored FenanPay deposit key in secure storage.');
+    }
+    if (hasWithdrawal) {
+      await storage.write(
+        'gateway.fenanpay.withdrawalKey',
+        withdrawalKey.trim(),
+      );
+      debugPrint('Stored FenanPay withdrawal key in secure storage.');
+    }
+  } catch (e) {
+    debugPrint('Failed to store FenanPay keys in secure storage: $e');
+  }
 }
 
 class SuperAdminPortalApp extends ConsumerWidget {

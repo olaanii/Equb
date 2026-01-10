@@ -5,9 +5,11 @@ class WelcomeStep extends StatelessWidget {
   const WelcomeStep({
     super.key,
     required this.onNext,
+    required this.onSkip,
   });
 
   final VoidCallback onNext;
+  final VoidCallback onSkip;
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +100,15 @@ class WelcomeStep extends StatelessWidget {
                 'Get Started',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          Center(
+            child: TextButton(
+              onPressed: onSkip,
+              child: const Text('Skip for now'),
             ),
           ),
 

@@ -1,5 +1,6 @@
 import 'package:equb/models/group_analytics.dart';
 import 'package:equb/providers/providers.dart';
+import 'package:equb/ui/responsive.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:equb/ui/widgets/common.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -59,7 +60,7 @@ class _GroupAnalyticsScreenState extends ConsumerState<GroupAnalyticsScreen> {
               Text(error.toString(), textAlign: TextAlign.center),
               const SizedBox(height: 16),
               ElevatedButton(
-                onPressed: () => ref.invalidateSelf(),
+                onPressed: () => setState(() {}),
                 child: const Text('Retry'),
               ),
             ],

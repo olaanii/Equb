@@ -27,7 +27,10 @@ class GroupAnalyticsService {
 
       // Generate all analytics components
       final overview = await _calculateOverview(group, cutoffDate);
-      final contributionMetrics = await _calculateContributionMetrics(group, cutoffDate);
+      final contributionMetrics = await _calculateContributionMetrics(
+        group,
+        cutoffDate,
+      );
       final payoutMetrics = await _calculatePayoutMetrics(group, cutoffDate);
       final memberMetrics = await _calculateMemberMetrics(group, cutoffDate);
       final healthScore = _calculateHealthScore(
@@ -35,7 +38,12 @@ class GroupAnalyticsService {
         payoutMetrics,
         memberMetrics,
       );
-      final riskFactors = _assessRiskFactors(group, overview, contributionMetrics, memberMetrics);
+      final riskFactors = _assessRiskFactors(
+        group,
+        overview,
+        contributionMetrics,
+        memberMetrics,
+      );
       final trends = await _calculateTrends(group, timeframe);
 
       return GroupAnalytics(
@@ -65,31 +73,40 @@ class GroupAnalyticsService {
     }
   }
 
-  Future<AnalyticsOverview> _calculateOverview(EqubGroup group, DateTime cutoffDate) async {
+  Future<AnalyticsOverview> _calculateOverview(
+    EqubGroup group,
+    DateTime cutoffDate,
+  ) async {
     final members = group.members;
-    final history = group.rotationState.history
-        .where((record) => record.processedAt != null && record.processedAt!.isAfter(cutoffDate))
-        .toList();
+    final history =
+        group.rotationState.history
+            .where((record) => record.processedAt.isAfter(cutoffDate))
+            .toList();
 
     // Calculate active members (those who have contributed recently)
-    final activeMembers = members.where((memberId) {
-      final memberContributions = group.rotationState.contributionProgress[memberId] ?? 0.0;
-      return memberContributions >= group.contributionAmount * 0.5; // At least half of required amount
-    }).length;
+    final activeMembers =
+        members.where((memberId) {
+          final memberContributions =
+              group.rotationState.contributionProgress[memberId] ?? 0.0;
+          return memberContributions >=
+              group.contributionAmount *
+                  0.5; // At least half of required amount
+        }).length;
 
     final totalContributions = history.length * group.contributionAmount;
-    final totalPayouts = history.fold<double>(0, (sum, record) => sum + record.amount);
+    final totalPayouts = history.fold<double>(
+      0,
+      (sum, record) => sum + record.amount,
+    );
     final currentPot = (group.rotationState.contributionProgress.values
         .fold<double>(0, (sum, progress) => sum + progress));
 
-    final averageContribution = members.isNotEmpty
-        ? totalContributions / members.length
-        : 0.0;
+    final averageContribution =
+        members.isNotEmpty ? totalContributions / members.length : 0.0;
 
     final nextPayoutDate = group.rotationState.nextPayoutDate;
-    final daysUntilNextPayout = nextPayoutDate != null
-        ? nextPayoutDate.difference(DateTime.now()).inDays
-        : 0;
+    final daysUntilNextPayout =
+        nextPayoutDate.difference(DateTime.now()).inDays;
 
     return AnalyticsOverview(
       totalMembers: members.length,
@@ -107,16 +124,21 @@ class GroupAnalyticsService {
     EqubGroup group,
     DateTime cutoffDate,
   ) async {
-    final history = group.rotationState.history
-        .where((record) => record.processedAt != null && record.processedAt!.isAfter(cutoffDate))
-        .toList();
+    final history =
+        group.rotationState.history
+            .where((record) => record.processedAt.isAfter(cutoffDate))
+            .toList();
 
     final totalContributions = history.length;
-    final onTimeContributions = history
-        .where((record) => record.scheduledFor.isAfter(record.processedAt!))
-        .length;
+    final onTimeContributions =
+        history
+            .where((record) => record.scheduledFor.isAfter(record.processedAt))
+            .length;
     final lateContributions = totalContributions - onTimeContributions;
-    final missedContributions = _calculateMissedContributions(group, cutoffDate);
+    final missedContributions = _calculateMissedContributions(
+      group,
+      cutoffDate,
+    );
 
     final averageContributionAmount = group.contributionAmount;
 
@@ -126,19 +148,23 @@ class GroupAnalyticsService {
     // Calculate top contributors
     final memberContributions = <String, double>{};
     for (final memberId in group.members) {
-      memberContributions[memberId] = group.rotationState.contributionProgress[memberId] ?? 0.0;
+      memberContributions[memberId] =
+          group.rotationState.contributionProgress[memberId] ?? 0.0;
     }
 
-    final topContributors = memberContributions.entries
-        .map((entry) => MemberContribution(
-          memberId: entry.key,
-          amount: entry.value,
-          contributionCount: 1, // Simplified
-          onTimeRate: 1.0, // Simplified
-        ))
-        .toList()
-      ..sort((a, b) => b.amount.compareTo(a.amount))
-      ..take(5);
+    final topContributors =
+        memberContributions.entries
+            .map(
+              (entry) => MemberContribution(
+                memberId: entry.key,
+                amount: entry.value,
+                contributionCount: 1, // Simplified
+                onTimeRate: 1.0, // Simplified
+              ),
+            )
+            .toList()
+          ..sort((a, b) => b.amount.compareTo(a.amount))
+          ..take(5);
 
     return ContributionMetrics(
       totalContributions: totalContributions,
@@ -156,26 +182,34 @@ class GroupAnalyticsService {
     EqubGroup group,
     DateTime cutoffDate,
   ) async {
-    final history = group.rotationState.history
-        .where((record) => record.processedAt != null && record.processedAt!.isAfter(cutoffDate))
-        .toList();
+    final history =
+        group.rotationState.history
+            .where((record) => record.processedAt.isAfter(cutoffDate))
+            .toList();
 
     final totalPayouts = history.length;
     final completedPayouts = history.length; // All records are processed
     final pendingPayouts = 0; // Simplified
     final failedPayouts = 0; // Simplified
 
-    final averagePayoutAmount = history.isNotEmpty
-        ? history.fold<double>(0, (sum, record) => sum + record.amount) / history.length
-        : 0.0;
+    final averagePayoutAmount =
+        history.isNotEmpty
+            ? history.fold<double>(0, (sum, record) => sum + record.amount) /
+                history.length
+            : 0.0;
 
     // Calculate payout trend
-    final payoutTrend = history.map((record) => PayoutDataPoint(
-      date: record.processedAt!,
-      amount: record.amount,
-      recipientId: record.memberId,
-      completed: true,
-    )).toList();
+    final payoutTrend =
+        history
+            .map(
+              (record) => PayoutDataPoint(
+                date: record.processedAt,
+                amount: record.amount,
+                recipientId: record.memberId,
+                completed: true,
+              ),
+            )
+            .toList();
 
     // Calculate most frequent winners
     final winnerCounts = <String, int>{};
@@ -183,18 +217,24 @@ class GroupAnalyticsService {
       winnerCounts[record.memberId] = (winnerCounts[record.memberId] ?? 0) + 1;
     }
 
-    final mostFrequentWinners = winnerCounts.entries
-        .map((entry) => MemberPayout(
-          memberId: entry.key,
-          payoutCount: entry.value,
-          totalAmount: entry.value * group.contributionAmount * group.members.length,
-          lastPayoutDate: history
-              .where((record) => record.memberId == entry.key)
-              .map((record) => record.processedAt!)
-              .reduce((a, b) => a.isAfter(b) ? a : b),
-        ))
-        .toList()
-      ..sort((a, b) => b.payoutCount.compareTo(a.payoutCount));
+    final mostFrequentWinners =
+        winnerCounts.entries
+            .map(
+              (entry) => MemberPayout(
+                memberId: entry.key,
+                payoutCount: entry.value,
+                totalAmount:
+                    entry.value *
+                    group.contributionAmount *
+                    group.members.length,
+                lastPayoutDate: history
+                    .where((record) => record.memberId == entry.key)
+                    .map((record) => record.processedAt)
+                    .reduce((a, b) => a.isAfter(b) ? a : b),
+              ),
+            )
+            .toList()
+          ..sort((a, b) => b.payoutCount.compareTo(a.payoutCount));
 
     return PayoutMetrics(
       totalPayouts: totalPayouts,
@@ -217,7 +257,8 @@ class GroupAnalyticsService {
     final riskProfiles = <String, RiskProfile>{};
 
     for (final memberId in group.members) {
-      final contributions = group.rotationState.contributionProgress[memberId] ?? 0.0;
+      final contributions =
+          group.rotationState.contributionProgress[memberId] ?? 0.0;
       final payouts = group.rotationState.history
           .where((record) => record.memberId == memberId)
           .fold<double>(0, (sum, record) => sum + record.amount);
@@ -227,8 +268,12 @@ class GroupAnalyticsService {
         totalContributions: contributions,
         totalPayouts: payouts,
         contributionStreak: 1, // Simplified
-        lastActivityDate: DateTime.now().subtract(const Duration(days: 1)), // Simplified
-        joinDate: DateTime.now().subtract(const Duration(days: 30)), // Simplified
+        lastActivityDate: DateTime.now().subtract(
+          const Duration(days: 1),
+        ), // Simplified
+        joinDate: DateTime.now().subtract(
+          const Duration(days: 30),
+        ), // Simplified
       );
 
       memberStats.add(stats);
@@ -249,7 +294,11 @@ class GroupAnalyticsService {
     );
   }
 
-  RiskProfile _assessMemberRisk(String memberId, EqubGroup group, MemberStats stats) {
+  RiskProfile _assessMemberRisk(
+    String memberId,
+    EqubGroup group,
+    MemberStats stats,
+  ) {
     final factors = <RiskFactor>[];
     double riskScore = 0.0;
 
@@ -257,25 +306,31 @@ class GroupAnalyticsService {
     final expectedContributions = group.contributionAmount;
     final actualContributions = stats.totalContributions;
     if (actualContributions < expectedContributions * 0.8) {
-      factors.add(const RiskFactor(
-        type: 'low_contribution',
-        severity: 0.7,
-        description: 'Member has contributed less than 80% of expected amount',
-        impact: 'May delay group payouts',
-        recommendation: 'Contact member to encourage contributions',
-      ));
+      factors.add(
+        const RiskFactor(
+          type: 'low_contribution',
+          severity: 0.7,
+          description:
+              'Member has contributed less than 80% of expected amount',
+          impact: 'May delay group payouts',
+          recommendation: 'Contact member to encourage contributions',
+        ),
+      );
       riskScore += 0.7;
     }
 
     // Check inactivity
     if (stats.daysSinceLastActivity > 7) {
-      factors.add(RiskFactor(
-        type: 'inactivity',
-        severity: 0.5,
-        description: 'Member has been inactive for ${stats.daysSinceLastActivity} days',
-        impact: 'May affect group participation',
-        recommendation: 'Send reminder notification',
-      ));
+      factors.add(
+        RiskFactor(
+          type: 'inactivity',
+          severity: 0.5,
+          description:
+              'Member has been inactive for ${stats.daysSinceLastActivity} days',
+          impact: 'May affect group participation',
+          recommendation: 'Send reminder notification',
+        ),
+      );
       riskScore += 0.5;
     }
 
@@ -305,9 +360,11 @@ class GroupAnalyticsService {
     score -= (1.0 - payoutHealth) * 0.3;
 
     // Member activity health (30% weight)
-    final averageActivity = members.activityLevels.values.isNotEmpty
-        ? members.activityLevels.values.reduce((a, b) => a + b) / members.activityLevels.length
-        : 0.0;
+    final averageActivity =
+        members.activityLevels.values.isNotEmpty
+            ? members.activityLevels.values.reduce((a, b) => a + b) /
+                members.activityLevels.length
+            : 0.0;
     score -= (1.0 - averageActivity) * 0.3;
 
     return score.clamp(0.0, 1.0);
@@ -323,36 +380,44 @@ class GroupAnalyticsService {
 
     // Group size risk
     if (overview.totalMembers < 3) {
-      factors.add(const RiskFactor(
-        type: 'small_group',
-        severity: 0.8,
-        description: 'Group has fewer than 3 members',
-        impact: 'Higher risk of insufficient funds',
-        recommendation: 'Recruit more members before starting contributions',
-      ));
+      factors.add(
+        const RiskFactor(
+          type: 'small_group',
+          severity: 0.8,
+          description: 'Group has fewer than 3 members',
+          impact: 'Higher risk of insufficient funds',
+          recommendation: 'Recruit more members before starting contributions',
+        ),
+      );
     }
 
     // Contribution rate risk
     if (contributions.onTimeRate < 0.7) {
-      factors.add(RiskFactor(
-        type: 'low_contribution_rate',
-        severity: 0.6,
-        description: 'Only ${(contributions.onTimeRate * 100).round()}% of contributions are on time',
-        impact: 'May cause delays in payouts',
-        recommendation: 'Implement stricter contribution deadlines',
-      ));
+      factors.add(
+        RiskFactor(
+          type: 'low_contribution_rate',
+          severity: 0.6,
+          description:
+              'Only ${(contributions.onTimeRate * 100).round()}% of contributions are on time',
+          impact: 'May cause delays in payouts',
+          recommendation: 'Implement stricter contribution deadlines',
+        ),
+      );
     }
 
     // Inactive members risk
-    final inactiveCount = members.activityLevels.values.where((level) => level < 0.5).length;
+    final inactiveCount =
+        members.activityLevels.values.where((level) => level < 0.5).length;
     if (inactiveCount > overview.totalMembers * 0.3) {
-      factors.add(RiskFactor(
-        type: 'inactive_members',
-        severity: 0.5,
-        description: '$inactiveCount members are inactive',
-        impact: 'May affect group stability',
-        recommendation: 'Contact inactive members and consider replacement',
-      ));
+      factors.add(
+        RiskFactor(
+          type: 'inactive_members',
+          severity: 0.5,
+          description: '$inactiveCount members are inactive',
+          impact: 'May affect group stability',
+          recommendation: 'Contact inactive members and consider replacement',
+        ),
+      );
     }
 
     return factors;
@@ -393,15 +458,19 @@ class GroupAnalyticsService {
 
     for (int i = 6; i >= 0; i--) {
       final date = now.subtract(Duration(days: i));
-      trend.add(ContributionDataPoint(
-        date: date,
-        amount: group.contributionAmount * group.members.length * 0.8, // 80% collection rate
-        expectedAmount: group.contributionAmount * group.members.length,
-        onTime: true,
-      ));
+      trend.add(
+        ContributionDataPoint(
+          date: date,
+          amount:
+              group.contributionAmount *
+              group.members.length *
+              0.8, // 80% collection rate
+          expectedAmount: group.contributionAmount * group.members.length,
+          onTime: true,
+        ),
+      );
     }
 
     return trend;
   }
 }
-

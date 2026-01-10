@@ -2,14 +2,10 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equb/models/group_member.dart';
-import 'package:equb/models/group_model.dart';
 import 'package:equb/services/system_log_service.dart';
 
 class GroupManagementService {
-  GroupManagementService({
-    required this.firestore,
-    required this.logService,
-  });
+  GroupManagementService({required this.firestore, required this.logService});
 
   final FirebaseFirestore firestore;
   final SystemLogService logService;
@@ -34,12 +30,16 @@ class GroupManagementService {
       }
 
       // Check if there's already a pending invitation
-      final existingInvitation = await _getPendingInvitation(groupId, invitedUserId);
+      final existingInvitation = await _getPendingInvitation(
+        groupId,
+        invitedUserId,
+      );
       if (existingInvitation != null) {
         throw Exception('User already has a pending invitation to this group');
       }
 
-      final invitationId = '${groupId}_${invitedUserId}_${DateTime.now().millisecondsSinceEpoch}';
+      final invitationId =
+          '${groupId}_${invitedUserId}_${DateTime.now().millisecondsSinceEpoch}';
       final expiresAt = DateTime.now().add(expiryDuration);
 
       final invitation = GroupInvitation(
@@ -89,7 +89,11 @@ class GroupManagementService {
   /// Accept a group invitation
   Future<void> acceptInvitation(String invitationId) async {
     try {
-      final invitationDoc = await firestore.collection(_invitationsCollection).doc(invitationId).get();
+      final invitationDoc =
+          await firestore
+              .collection(_invitationsCollection)
+              .doc(invitationId)
+              .get();
 
       if (!invitationDoc.exists) {
         throw Exception('Invitation not found');
@@ -138,7 +142,6 @@ class GroupManagementService {
           'userId': invitation.invitedUserId,
         },
       );
-
     } catch (e) {
       logService.log(
         LogLevel.error,
@@ -153,7 +156,11 @@ class GroupManagementService {
   /// Reject a group invitation
   Future<void> rejectInvitation(String invitationId) async {
     try {
-      final invitationDoc = await firestore.collection(_invitationsCollection).doc(invitationId).get();
+      final invitationDoc =
+          await firestore
+              .collection(_invitationsCollection)
+              .doc(invitationId)
+              .get();
 
       if (!invitationDoc.exists) {
         throw Exception('Invitation not found');
@@ -171,7 +178,6 @@ class GroupManagementService {
         'User rejected group invitation',
         context: {'invitationId': invitationId},
       );
-
     } catch (e) {
       logService.log(
         LogLevel.error,
@@ -192,12 +198,13 @@ class GroupManagementService {
   }) async {
     try {
       // Verify permissions (would check if changer has permission)
-      final memberDoc = await firestore
-          .collection(_groupsCollection)
-          .doc(groupId)
-          .collection(_membersSubcollection)
-          .doc(memberId)
-          .get();
+      final memberDoc =
+          await firestore
+              .collection(_groupsCollection)
+              .doc(groupId)
+              .collection(_membersSubcollection)
+              .doc(memberId)
+              .get();
 
       if (!memberDoc.exists) {
         throw Exception('Member not found in group');
@@ -224,7 +231,6 @@ class GroupManagementService {
           'changedBy': changedBy,
         },
       );
-
     } catch (e) {
       logService.log(
         LogLevel.error,
@@ -249,12 +255,13 @@ class GroupManagementService {
   }) async {
     try {
       // Check if member exists
-      final memberDoc = await firestore
-          .collection(_groupsCollection)
-          .doc(groupId)
-          .collection(_membersSubcollection)
-          .doc(memberId)
-          .get();
+      final memberDoc =
+          await firestore
+              .collection(_groupsCollection)
+              .doc(groupId)
+              .collection(_membersSubcollection)
+              .doc(memberId)
+              .get();
 
       if (!memberDoc.exists) {
         throw Exception('Member not found in group');
@@ -264,12 +271,13 @@ class GroupManagementService {
       await memberDoc.reference.delete();
 
       // Cancel any pending invitations from this user
-      final pendingInvitations = await firestore
-          .collection(_invitationsCollection)
-          .where('groupId', isEqualTo: groupId)
-          .where('invitedUserId', isEqualTo: memberId)
-          .where('status', isEqualTo: GroupInvitationStatus.pending.name)
-          .get();
+      final pendingInvitations =
+          await firestore
+              .collection(_invitationsCollection)
+              .where('groupId', isEqualTo: groupId)
+              .where('invitedUserId', isEqualTo: memberId)
+              .where('status', isEqualTo: GroupInvitationStatus.pending.name)
+              .get();
 
       final batch = firestore.batch();
       for (final doc in pendingInvitations.docs) {
@@ -291,7 +299,6 @@ class GroupManagementService {
           'reason': reason,
         },
       );
-
     } catch (e) {
       logService.log(
         LogLevel.error,
@@ -326,7 +333,6 @@ class GroupManagementService {
         'Group settings updated',
         context: {'groupId': groupId, 'updatedBy': updatedBy},
       );
-
     } catch (e) {
       logService.log(
         LogLevel.error,
@@ -341,16 +347,16 @@ class GroupManagementService {
   /// Get group members with roles
   Future<List<GroupMember>> getGroupMembers(String groupId) async {
     try {
-      final membersSnapshot = await firestore
-          .collection(_groupsCollection)
-          .doc(groupId)
-          .collection(_membersSubcollection)
-          .get();
+      final membersSnapshot =
+          await firestore
+              .collection(_groupsCollection)
+              .doc(groupId)
+              .collection(_membersSubcollection)
+              .get();
 
       return membersSnapshot.docs
           .map((doc) => GroupMember.fromJson(doc.data()))
           .toList();
-
     } catch (e) {
       logService.log(
         LogLevel.error,
@@ -365,17 +371,17 @@ class GroupManagementService {
   /// Get pending invitations for a group
   Future<List<GroupInvitation>> getPendingInvitations(String groupId) async {
     try {
-      final invitationsSnapshot = await firestore
-          .collection(_invitationsCollection)
-          .where('groupId', isEqualTo: groupId)
-          .where('status', isEqualTo: GroupInvitationStatus.pending.name)
-          .get();
+      final invitationsSnapshot =
+          await firestore
+              .collection(_invitationsCollection)
+              .where('groupId', isEqualTo: groupId)
+              .where('status', isEqualTo: GroupInvitationStatus.pending.name)
+              .get();
 
       return invitationsSnapshot.docs
           .map((doc) => GroupInvitation.fromJson(doc.data()))
           .where((invitation) => !invitation.isExpired)
           .toList();
-
     } catch (e) {
       logService.log(
         LogLevel.error,
@@ -390,17 +396,17 @@ class GroupManagementService {
   /// Get user's pending invitations
   Future<List<GroupInvitation>> getUserPendingInvitations(String userId) async {
     try {
-      final invitationsSnapshot = await firestore
-          .collection(_invitationsCollection)
-          .where('invitedUserId', isEqualTo: userId)
-          .where('status', isEqualTo: GroupInvitationStatus.pending.name)
-          .get();
+      final invitationsSnapshot =
+          await firestore
+              .collection(_invitationsCollection)
+              .where('invitedUserId', isEqualTo: userId)
+              .where('status', isEqualTo: GroupInvitationStatus.pending.name)
+              .get();
 
       return invitationsSnapshot.docs
           .map((doc) => GroupInvitation.fromJson(doc.data()))
           .where((invitation) => !invitation.isExpired)
           .toList();
-
     } catch (e) {
       logService.log(
         LogLevel.error,
@@ -419,12 +425,13 @@ class GroupManagementService {
     required String permission,
   }) async {
     try {
-      final memberDoc = await firestore
-          .collection(_groupsCollection)
-          .doc(groupId)
-          .collection(_membersSubcollection)
-          .doc(userId)
-          .get();
+      final memberDoc =
+          await firestore
+              .collection(_groupsCollection)
+              .doc(groupId)
+              .collection(_membersSubcollection)
+              .doc(userId)
+              .get();
 
       if (!memberDoc.exists) return false;
 
@@ -446,13 +453,17 @@ class GroupManagementService {
         default:
           return false;
       }
-
     } catch (e) {
       logService.log(
         LogLevel.error,
         'permission_check_failed',
         'Failed to check user permission',
-        context: {'groupId': groupId, 'userId': userId, 'permission': permission, 'error': e.toString()},
+        context: {
+          'groupId': groupId,
+          'userId': userId,
+          'permission': permission,
+          'error': e.toString(),
+        },
       );
       return false;
     }
@@ -461,12 +472,13 @@ class GroupManagementService {
   /// Helper method to check if user is a member of group
   Future<bool> _isUserMemberOfGroup(String userId, String groupId) async {
     try {
-      final memberDoc = await firestore
-          .collection(_groupsCollection)
-          .doc(groupId)
-          .collection(_membersSubcollection)
-          .doc(userId)
-          .get();
+      final memberDoc =
+          await firestore
+              .collection(_groupsCollection)
+              .doc(groupId)
+              .collection(_membersSubcollection)
+              .doc(userId)
+              .get();
 
       return memberDoc.exists;
     } catch (e) {
@@ -475,15 +487,19 @@ class GroupManagementService {
   }
 
   /// Helper method to get pending invitation
-  Future<GroupInvitation?> _getPendingInvitation(String groupId, String userId) async {
+  Future<GroupInvitation?> _getPendingInvitation(
+    String groupId,
+    String userId,
+  ) async {
     try {
-      final invitationSnapshot = await firestore
-          .collection(_invitationsCollection)
-          .where('groupId', isEqualTo: groupId)
-          .where('invitedUserId', isEqualTo: userId)
-          .where('status', isEqualTo: GroupInvitationStatus.pending.name)
-          .limit(1)
-          .get();
+      final invitationSnapshot =
+          await firestore
+              .collection(_invitationsCollection)
+              .where('groupId', isEqualTo: groupId)
+              .where('invitedUserId', isEqualTo: userId)
+              .where('status', isEqualTo: GroupInvitationStatus.pending.name)
+              .limit(1)
+              .get();
 
       if (invitationSnapshot.docs.isEmpty) return null;
 
@@ -493,4 +509,3 @@ class GroupManagementService {
     }
   }
 }
-

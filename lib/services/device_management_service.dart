@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,10 +5,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:equb/services/system_log_service.dart';
 
 class DeviceManagementService {
-  DeviceManagementService({
-    required this.firestore,
-    required this.logService,
-  });
+  DeviceManagementService({required this.firestore, required this.logService});
 
   final FirebaseFirestore firestore;
   final SystemLogService logService;
@@ -68,10 +64,11 @@ class DeviceManagementService {
   /// Get all devices for a user
   Future<List<DeviceInfo>> getUserDevices(String userId) async {
     try {
-      final snapshot = await firestore
-          .collection(_collection)
-          .where('userId', isEqualTo: userId)
-          .get();
+      final snapshot =
+          await firestore
+              .collection(_collection)
+              .where('userId', isEqualTo: userId)
+              .get();
 
       return snapshot.docs
           .map((doc) => DeviceInfo.fromJson(doc.data()))
@@ -242,10 +239,16 @@ class DeviceManagementService {
   }
 
   /// Send security alert to all trusted devices
-  Future<void> sendSecurityAlert(String userId, SecurityAlertType alertType, Map<String, dynamic> alertData) async {
+  Future<void> sendSecurityAlert(
+    String userId,
+    SecurityAlertType alertType,
+    Map<String, dynamic> alertData,
+  ) async {
     try {
       final devices = await getUserDevices(userId);
-      final trustedDevices = devices.where((device) => device.isTrusted && device.fcmToken != null);
+      final trustedDevices = devices.where(
+        (device) => device.isTrusted && device.fcmToken != null,
+      );
 
       if (trustedDevices.isEmpty) {
         logService.log(
@@ -270,13 +273,16 @@ class DeviceManagementService {
           'alertData': alertData,
         },
       );
-
     } catch (e) {
       logService.log(
         LogLevel.error,
         'security_alert_failed',
         'Failed to send security alert',
-        context: {'userId': userId, 'alertType': alertType.name, 'error': e.toString()},
+        context: {
+          'userId': userId,
+          'alertType': alertType.name,
+          'error': e.toString(),
+        },
       );
     }
   }
@@ -355,7 +361,8 @@ class DeviceInfo {
   final DateTime? trustedAt;
   final DateTime? trustRevokedAt;
 
-  bool get isCurrentSession => DateTime.now().difference(lastLoginAt).inMinutes < 5;
+  bool get isCurrentSession =>
+      DateTime.now().difference(lastLoginAt).inMinutes < 5;
 
   DeviceInfo copyWith({
     String? id,
@@ -420,12 +427,14 @@ class DeviceInfo {
       lastLoginAt: DateTime.parse(json['lastLoginAt'] as String),
       registeredAt: DateTime.parse(json['registeredAt'] as String),
       fcmToken: json['fcmToken'] as String?,
-      trustedAt: json['trustedAt'] != null
-          ? DateTime.parse(json['trustedAt'] as String)
-          : null,
-      trustRevokedAt: json['trustRevokedAt'] != null
-          ? DateTime.parse(json['trustRevokedAt'] as String)
-          : null,
+      trustedAt:
+          json['trustedAt'] != null
+              ? DateTime.parse(json['trustedAt'] as String)
+              : null,
+      trustRevokedAt:
+          json['trustRevokedAt'] != null
+              ? DateTime.parse(json['trustRevokedAt'] as String)
+              : null,
     );
   }
 }
@@ -451,4 +460,3 @@ enum SecurityAlertType {
   accountLocked,
   unusualLocation,
 }
-

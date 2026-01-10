@@ -1,4 +1,5 @@
 import 'package:equb/ui/auth_wrapper.dart';
+import 'package:equb/ui/home_shell.dart';
 import 'package:equb/ui/routes/admin_route.dart';
 import 'package:equb/ui/screens/groups/group_invitations_screen.dart';
 import 'package:equb/ui/screens/groups/group_settings_screen.dart';
@@ -6,14 +7,20 @@ import 'package:equb/ui/screens/onboarding/onboarding_flow_screen.dart';
 import 'package:equb/models/group_model.dart';
 import 'package:equb/ui/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:equb/services/notification_service.dart';
+import 'package:equb/services/secure_storage_service.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:equb/providers/app_providers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (!kReleaseMode) {
+    await _bootstrapGatewaySecretsFromDartDefines();
+  }
 
   bool firebaseInitialized = false;
   String? firebaseError;
@@ -54,6 +61,37 @@ void main() async {
       ),
     ),
   );
+}
+
+Future<void> _bootstrapGatewaySecretsFromDartDefines() async {
+  // Optional dev helper: pass keys at runtime so the wallet app can run
+  // even if secure storage isn't shared between different dev-server ports.
+  const depositKey = String.fromEnvironment('FENANPAY_DEPOSIT_KEY');
+  const withdrawalKey = String.fromEnvironment('FENANPAY_WITHDRAWAL_KEY');
+
+  final storage = SecureStorageService();
+
+  final hasDeposit = depositKey.trim().isNotEmpty;
+  final hasWithdrawal = withdrawalKey.trim().isNotEmpty;
+  if (!hasDeposit && !hasWithdrawal) return;
+
+  try {
+    if (hasDeposit) {
+      await storage.write('gateway.fenanpay.depositKey', depositKey.trim());
+      // Back-compat for older logic.
+      await storage.write('gateway.fenanpay.apiKey', depositKey.trim());
+      debugPrint('Stored FenanPay deposit key in secure storage.');
+    }
+    if (hasWithdrawal) {
+      await storage.write(
+        'gateway.fenanpay.withdrawalKey',
+        withdrawalKey.trim(),
+      );
+      debugPrint('Stored FenanPay withdrawal key in secure storage.');
+    }
+  } catch (e) {
+    debugPrint('Failed to store FenanPay keys in secure storage: $e');
+  }
 }
 
 class EqubApp extends ConsumerWidget {
@@ -136,6 +174,9 @@ class EqubApp extends ConsumerWidget {
           case '/':
             page = const AuthWrapper();
             break;
+          case '/home':
+            page = const HomeShell();
+            break;
           case '/admin':
             page = const AdminRoute();
             break;
@@ -143,11 +184,17 @@ class EqubApp extends ConsumerWidget {
             page = const OnboardingFlowScreen();
             break;
           case '/group-settings':
+            if (!kDebugMode) {
+              page = const HomeShell();
+              break;
+            }
             final group = settings.arguments as GroupModel?;
-            page = group != null ? GroupSettingsScreen(group: group) : const AuthWrapper();
+            page = group != null
+                ? GroupSettingsScreen(group: group)
+                : const AuthWrapper();
             break;
           case '/group-invitations':
-            page = const GroupInvitationsScreen();
+            page = kDebugMode ? const GroupInvitationsScreen() : const HomeShell();
             break;
           default:
             page = const AuthWrapper();

@@ -5,9 +5,12 @@ import 'package:equb/domain/gateway_feature_flag.dart';
 import 'package:equb/services/payment_service.dart';
 import 'package:equb/services/adapters/telebirr_impl.dart';
 import 'package:equb/services/adapters/cbe_impl.dart';
+import 'package:equb/services/adapters/fenanpay_impl.dart';
 import 'package:equb/services/secure_storage_service.dart';
 import 'package:equb/services/system_log_service.dart';
 import 'package:firebase_database/firebase_database.dart';
+
+enum GatewayOperation { deposit, withdrawal }
 
 class PaymentGatewayConfig {
   final String id;
@@ -117,9 +120,25 @@ class GatewayService {
 
   final List<PaymentGatewayConfig> _configs = [
     PaymentGatewayConfig(
+      id: 'fenanpay',
+      name: 'FenanPay',
+      enabled: true,
+      environment: 'sandbox',
+      meta: const {
+        'environment': 'sandbox',
+        'baseUrl': 'https://api.fenanpay.com/api/v1/payment/sandbox/intent',
+        'returnUrl': 'https://fenanpay.com',
+        'expireIn': 3600,
+        'commissionPaidByCustomer': false,
+        // If empty array is passed, all enabled methods are selected.
+        'methods': <String>[],
+        'notes': 'Hosted checkout test integration (Payment Intent -> checkout URL).',
+      },
+    ),
+    PaymentGatewayConfig(
       id: 'telebirr',
       name: 'Telebirr',
-      enabled: true,
+      enabled: false,
       environment: 'sandbox',
       meta: const {
         'environment': 'sandbox',
@@ -241,10 +260,16 @@ class GatewayService {
     return byId.values.toList(growable: false);
   }
 
+  // Used to pick the right credentials for gateways that distinguish
+  // between inbound (deposit) and outbound (withdrawal/payout) operations.
+  // Defaults to deposit for existing call sites.
+  static const GatewayOperation _defaultOperation = GatewayOperation.deposit;
+
   /// Returns a PaymentService adapter for the given gateway id if configured.
   Future<PaymentService?> getAdapter(
     String gatewayId, {
     FeatureFlags? flags,
+    GatewayOperation operation = _defaultOperation,
   }) async {
     final list = await listGateways(flags: flags);
     final g = list.firstWhere(
@@ -253,6 +278,29 @@ class GatewayService {
     );
     if (!g.enabled) return null;
     final meta = g.meta;
+    if (gatewayId == 'fenanpay') {
+      final base = meta['baseUrl'] as String?;
+      final apiKey = _resolveFenanPayApiKey(meta, operation: operation);
+      final returnUrl = meta['returnUrl'] as String?;
+      final callbackUrl = meta['callbackUrl'] as String?;
+      final expireIn = meta['expireIn'] as int?;
+      final commissionPaidByCustomer = meta['commissionPaidByCustomer'] as bool?;
+      final methodsRaw = meta['methods'];
+      final methods =
+          (methodsRaw is List)
+              ? methodsRaw.map((e) => e.toString()).where((e) => e.isNotEmpty).toList()
+              : const <String>[];
+
+      return FenanPayImpl(
+        apiKey: apiKey,
+        intentEndpoint: base,
+        returnUrl: returnUrl,
+        callbackUrl: callbackUrl,
+        expireInSeconds: expireIn ?? 3600,
+        commissionPaidByCustomer: commissionPaidByCustomer ?? false,
+        methods: methods,
+      );
+    }
     if (gatewayId == 'telebirr') {
       final base = meta['baseUrl'] as String? ?? 'https://api.telebirr.example';
       final key = _requireCredential(meta, 'apiKey', gatewayId);
@@ -333,6 +381,24 @@ class GatewayService {
     }
     return value;
   }
+
+  String _resolveFenanPayApiKey(
+    Map<String, dynamic> meta, {
+    required GatewayOperation operation,
+  }) {
+    // Allow distinct keys for deposit vs withdrawal while keeping backwards
+    // compatibility with a single `apiKey` value.
+    final primaryField =
+        (operation == GatewayOperation.withdrawal)
+            ? 'withdrawalApiKey'
+            : 'depositApiKey';
+
+    final primary = (meta[primaryField] as String?)?.trim() ?? '';
+    if (primary.isNotEmpty) return primary;
+
+    // Back-compat / default.
+    return _requireCredential(meta, 'apiKey', 'fenanpay');
+  }
 }
 
 class GatewayCredentialException implements Exception {
@@ -388,6 +454,26 @@ List<PaymentGatewayConfig> _injectSecrets(
   }
   return configs
       .map((config) {
+        if (config.id == 'fenanpay') {
+          final mergedMeta = Map<String, dynamic>.from(config.meta);
+          // Prefer new split-key configuration.
+          if (secrets.fenanPayDepositKey != null &&
+              secrets.fenanPayDepositKey!.trim().isNotEmpty) {
+            mergedMeta['depositApiKey'] = secrets.fenanPayDepositKey;
+            // Keep existing callers working by also setting `apiKey`.
+            mergedMeta['apiKey'] = secrets.fenanPayDepositKey;
+          }
+          if (secrets.fenanPayWithdrawalKey != null &&
+              secrets.fenanPayWithdrawalKey!.trim().isNotEmpty) {
+            mergedMeta['withdrawalApiKey'] = secrets.fenanPayWithdrawalKey;
+          }
+          // Backwards compatible single key.
+          if (secrets.fenanPayApiKey != null &&
+              secrets.fenanPayApiKey!.trim().isNotEmpty) {
+            mergedMeta['apiKey'] = secrets.fenanPayApiKey;
+          }
+          return config.copyWith(meta: mergedMeta);
+        }
         if (config.id == 'telebirr') {
           final mergedMeta = Map<String, dynamic>.from(config.meta);
           if (secrets.telebirrApiKey != null) {

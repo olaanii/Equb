@@ -219,7 +219,7 @@ class _BulkUserManagementScreenState extends ConsumerState<BulkUserManagementScr
             Text('Failed to load users: $error'),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () => ref.invalidateSelf(),
+              onPressed: () => setState(() {}),
               child: const Text('Retry'),
             ),
           ],

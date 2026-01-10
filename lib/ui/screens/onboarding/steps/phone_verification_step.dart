@@ -4,6 +4,9 @@ import 'package:equb/models/onboarding_state.dart';
 import 'package:equb/providers/providers.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:equb/ui/widgets/common.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth_platform_interface/firebase_auth_platform_interface.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -33,6 +36,10 @@ class _PhoneVerificationStepState extends ConsumerState<PhoneVerificationStep> {
   int _resendCountdown = 0;
   Timer? _countdownTimer;
 
+  String? _verificationId;
+  ConfirmationResult? _webConfirmationResult;
+  String? _webVerificationId;
+
   @override
   void initState() {
     super.initState();
@@ -52,17 +59,65 @@ class _PhoneVerificationStepState extends ConsumerState<PhoneVerificationStep> {
     setState(() => _isSendingCode = true);
 
     try {
-      // TODO: Integrate with actual SMS service (Firebase Auth, Twilio, etc.)
-      // For now, simulate sending code
-      await Future.delayed(const Duration(seconds: 2));
+      final phone = _normalizePhone(widget.initialData.phoneNumber);
+      if (phone.isEmpty) {
+        throw Exception('Missing phone number. Go back and enter one.');
+      }
 
-      if (mounted) {
+      if (kIsWeb) {
+        final verifier = RecaptchaVerifier(
+          auth: FirebaseAuthPlatform.instance,
+          container: 'recaptcha-container',
+        );
+
+        final confirmation = await FirebaseAuth.instance.signInWithPhoneNumber(
+          phone,
+          verifier,
+        );
+
+        _webConfirmationResult = confirmation;
+        _webVerificationId = confirmation.verificationId;
+
+        if (!mounted) return;
         setState(() {
           _codeSent = true;
-          _resendCountdown = 60; // 60 seconds countdown
+          _resendCountdown = 60;
         });
         _startCountdown();
+        return;
       }
+
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: phone,
+        verificationCompleted: (credential) async {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user != null) {
+            await user.linkWithCredential(credential);
+          } else {
+            await FirebaseAuth.instance.signInWithCredential(credential);
+          }
+
+          if (!mounted) return;
+          final updatedData = widget.initialData.copyWith(phoneVerified: true);
+          widget.onDataChanged(updatedData);
+          widget.onNext();
+        },
+        verificationFailed: (e) {
+          throw e;
+        },
+        codeSent: (verificationId, _) {
+          _verificationId = verificationId;
+          if (!mounted) return;
+          setState(() {
+            _codeSent = true;
+            _resendCountdown = 60;
+          });
+          _startCountdown();
+        },
+        codeAutoRetrievalTimeout: (verificationId) {
+          _verificationId = verificationId;
+        },
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -96,17 +151,59 @@ class _PhoneVerificationStepState extends ConsumerState<PhoneVerificationStep> {
       return;
     }
 
+    final verificationId = _verificationId;
+    if (verificationId == null || verificationId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Code not sent yet. Please resend the code.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isVerifying = true);
 
     try {
-      // TODO: Integrate with actual verification service
-      // For now, accept any 6-digit code as valid
-      await Future.delayed(const Duration(seconds: 2));
+      if (kIsWeb) {
+        final code = _codeController.text.trim();
+        final user = FirebaseAuth.instance.currentUser;
 
-      // Update onboarding data
+        final verificationId = _webVerificationId;
+        final confirmation = _webConfirmationResult;
+        if (verificationId == null || verificationId.isEmpty || confirmation == null) {
+          throw StateError('Code not sent yet. Please resend the code.');
+        }
+
+        if (user != null) {
+          final credential = PhoneAuthProvider.credential(
+            verificationId: verificationId,
+            smsCode: code,
+          );
+          await user.linkWithCredential(credential);
+        } else {
+          await confirmation.confirm(code);
+        }
+
+        final updatedData = widget.initialData.copyWith(phoneVerified: true);
+        widget.onDataChanged(updatedData);
+        widget.onNext();
+        return;
+      }
+
+      final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: _codeController.text.trim(),
+      );
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await user.linkWithCredential(credential);
+      } else {
+        await FirebaseAuth.instance.signInWithCredential(credential);
+      }
+
       final updatedData = widget.initialData.copyWith(phoneVerified: true);
       widget.onDataChanged(updatedData);
-
       widget.onNext();
     } catch (e) {
       if (mounted) {
@@ -119,6 +216,15 @@ class _PhoneVerificationStepState extends ConsumerState<PhoneVerificationStep> {
         setState(() => _isVerifying = false);
       }
     }
+  }
+
+  String _normalizePhone(String input) {
+    final raw = input.replaceAll(' ', '').trim();
+    if (raw.isEmpty) return raw;
+    if (raw.startsWith('+')) return raw;
+    if (raw.startsWith('251')) return '+$raw';
+    if (raw.startsWith('0')) return '+251${raw.substring(1)}';
+    return raw;
   }
 
   @override

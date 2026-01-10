@@ -1,5 +1,3 @@
-import 'package:equb/models/user_model.dart';
-
 enum OnboardingStep {
   welcome,
   profileSetup,
@@ -94,9 +92,9 @@ class OnboardingData {
 
   bool get isComplete {
     return phoneVerified &&
-           documentsUploaded &&
-           paymentMethodSetup &&
-           displayName.isNotEmpty;
+        documentsUploaded &&
+        paymentMethodSetup &&
+        displayName.isNotEmpty;
   }
 
   Map<String, dynamic> toJson() {
@@ -140,7 +138,8 @@ class OnboardingProgress {
   final OnboardingStep currentStep;
   final bool isComplete;
 
-  double get progressPercentage => totalSteps > 0 ? completedSteps / totalSteps : 0.0;
+  double get progressPercentage =>
+      totalSteps > 0 ? completedSteps / totalSteps : 0.0;
 
   OnboardingProgress copyWith({
     int? completedSteps,
@@ -156,4 +155,3 @@ class OnboardingProgress {
     );
   }
 }
-

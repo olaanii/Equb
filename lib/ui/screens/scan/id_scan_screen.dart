@@ -53,12 +53,10 @@ class _IdScanScreenState extends ConsumerState<IdScanScreen> with WidgetsBinding
       final scanService = ref.read(idScanServiceProvider);
       await scanService.initialize();
 
-      if (scanService.availableCameras.isNotEmpty) {
+      if (scanService.cameras.isNotEmpty) {
         _cameraController = await scanService.createCameraController(
           lensDirection: CameraLensDirection.back,
         );
-
-        await _cameraController!.initialize();
         setState(() => _isInitialized = true);
       }
     } catch (e) {
@@ -267,7 +265,7 @@ class _IdScanScreenState extends ConsumerState<IdScanScreen> with WidgetsBinding
                       label: const Text('Start scan'),
                     )
                   else
-                    const FilledButton.icon(
+                    FilledButton.icon(
                       onPressed: null,
                       icon: Icon(Icons.qr_code_scanner_rounded),
                       label: Text('Initializing camera...'),
@@ -583,7 +581,7 @@ class _DocumentProcessingScreenState extends ConsumerState<DocumentProcessingScr
                                 decoration: BoxDecoration(
                                   color: (_scanResult!.confidence > 0.7)
                                       ? scheme.primary.withOpacity(0.1)
-                                      : scheme.warning.withOpacity(0.1),
+                                      : scheme.tertiary.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
@@ -592,7 +590,7 @@ class _DocumentProcessingScreenState extends ConsumerState<DocumentProcessingScr
                                     fontSize: 12,
                                     color: (_scanResult!.confidence > 0.7)
                                         ? scheme.primary
-                                        : scheme.warning,
+                                        : scheme.tertiary,
                                   ),
                                 ),
                               ),

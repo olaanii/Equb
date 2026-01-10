@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:camera/camera.dart';
 import 'package:equb/models/id_document.dart';

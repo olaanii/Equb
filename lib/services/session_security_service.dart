@@ -414,9 +414,7 @@ class SessionSecurityService {
       if (activeSessions.length > _maxConcurrentSessions) {
         // End oldest sessions to stay within limit
         final sessionsToEnd = activeSessions.length - _maxConcurrentSessions;
-        final sortedSessions = activeSessions
-            .where((s) => s.lastActivityAt != null)
-            .toList()
+        final sortedSessions = activeSessions.toList()
           ..sort((a, b) => a.lastActivityAt.compareTo(b.lastActivityAt));
 
         for (var i = 0; i < sessionsToEnd && i < sortedSessions.length; i++) {

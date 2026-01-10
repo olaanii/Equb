@@ -78,19 +78,19 @@ class GroupDetailScreen extends ConsumerWidget {
           children: [
             Expanded(
               child: PrimaryButton(
-                text: 'Pay with Telebirr',
+                text: 'Pay with FenanPay',
                 icon: Icons.payment,
                 onPressed: () async {
               final messenger = ScaffoldMessenger.of(context);
               try {
                 final gatewayService = ref.read(gatewayServiceProvider);
                 final paymentService = await gatewayService.getAdapter(
-                  'telebirr',
+                  'fenanpay',
                 );
                 if (paymentService == null) {
                   messenger.showSnackBar(
                     const SnackBar(
-                      content: Text('Telebirr gateway is not configured.'),
+                      content: Text('FenanPay gateway is not configured.'),
                     ),
                   );
                   return;
@@ -102,7 +102,7 @@ class GroupDetailScreen extends ConsumerWidget {
                   fromUserId: user?.id ?? 'demo_user',
                   toUserId: group.id,
                   amount: group.contribution.toDouble(),
-                  gateway: 'telebirr',
+                  gateway: 'fenanpay',
                   context: context,
                 );
 
@@ -112,7 +112,7 @@ class GroupDetailScreen extends ConsumerWidget {
                   case TransactionStatus.success:
                     messenger.showSnackBar(
                       const SnackBar(
-                        content: Text('Telebirr payment completed.'),
+                        content: Text('Payment completed.'),
                       ),
                     );
                     break;
@@ -120,7 +120,7 @@ class GroupDetailScreen extends ConsumerWidget {
                     messenger.showSnackBar(
                       const SnackBar(
                         content: Text(
-                          'Telebirr payment failed. Please try again.',
+                          'Payment failed. Please try again.',
                         ),
                       ),
                     );
@@ -129,7 +129,7 @@ class GroupDetailScreen extends ConsumerWidget {
                     messenger.showSnackBar(
                       const SnackBar(
                         content: Text(
-                          'Telebirr payment started. Awaiting confirmation.',
+                          'Payment started. Awaiting confirmation.',
                         ),
                       ),
                     );
@@ -139,7 +139,7 @@ class GroupDetailScreen extends ConsumerWidget {
                 messenger.showSnackBar(
                   SnackBar(
                     content: Text(
-                      'Telebirr credentials missing: ${err.message}',
+                      'FenanPay credentials missing: ${err.message}',
                     ),
                     action: SnackBarAction(
                       label: 'View runbook',
@@ -154,7 +154,7 @@ class GroupDetailScreen extends ConsumerWidget {
                 );
               } catch (err) {
                 messenger.showSnackBar(
-                  SnackBar(content: Text('Telebirr payment error: $err')),
+                  SnackBar(content: Text('Payment error: $err')),
                 );
               }
             },

@@ -1,11 +1,4 @@
-import 'package:equb/models/user_model.dart';
-
-enum GroupMemberRole {
-  owner,
-  admin,
-  moderator,
-  member,
-}
+enum GroupMemberRole { owner, admin, moderator, member }
 
 extension GroupMemberRoleX on GroupMemberRole {
   String get displayName {
@@ -34,22 +27,21 @@ extension GroupMemberRoleX on GroupMemberRole {
     }
   }
 
-  bool get canInviteMembers => this == GroupMemberRole.owner || this == GroupMemberRole.admin;
-  bool get canRemoveMembers => this == GroupMemberRole.owner || this == GroupMemberRole.admin;
-  bool get canChangeSettings => this == GroupMemberRole.owner || this == GroupMemberRole.admin;
+  bool get canInviteMembers =>
+      this == GroupMemberRole.owner || this == GroupMemberRole.admin;
+  bool get canRemoveMembers =>
+      this == GroupMemberRole.owner || this == GroupMemberRole.admin;
+  bool get canChangeSettings =>
+      this == GroupMemberRole.owner || this == GroupMemberRole.admin;
   bool get canManageRoles => this == GroupMemberRole.owner;
   bool get canDeleteGroup => this == GroupMemberRole.owner;
-  bool get canModerateContent => this == GroupMemberRole.owner ||
-                                this == GroupMemberRole.admin ||
-                                this == GroupMemberRole.moderator;
+  bool get canModerateContent =>
+      this == GroupMemberRole.owner ||
+      this == GroupMemberRole.admin ||
+      this == GroupMemberRole.moderator;
 }
 
-enum GroupInvitationStatus {
-  pending,
-  accepted,
-  rejected,
-  expired,
-}
+enum GroupInvitationStatus { pending, accepted, rejected, expired }
 
 class GroupMember {
   const GroupMember({
@@ -100,9 +92,10 @@ class GroupMember {
       ),
       joinedAt: DateTime.parse(json['joinedAt'] as String),
       invitedBy: json['invitedBy'] as String?,
-      invitationAcceptedAt: json['invitationAcceptedAt'] != null
-          ? DateTime.parse(json['invitationAcceptedAt'] as String)
-          : null,
+      invitationAcceptedAt:
+          json['invitationAcceptedAt'] != null
+              ? DateTime.parse(json['invitationAcceptedAt'] as String)
+              : null,
     );
   }
 }
@@ -182,12 +175,14 @@ class GroupInvitation {
       createdAt: DateTime.parse(json['createdAt'] as String),
       expiresAt: DateTime.parse(json['expiresAt'] as String),
       message: json['message'] as String?,
-      acceptedAt: json['acceptedAt'] != null
-          ? DateTime.parse(json['acceptedAt'] as String)
-          : null,
-      rejectedAt: json['rejectedAt'] != null
-          ? DateTime.parse(json['rejectedAt'] as String)
-          : null,
+      acceptedAt:
+          json['acceptedAt'] != null
+              ? DateTime.parse(json['acceptedAt'] as String)
+              : null,
+      rejectedAt:
+          json['rejectedAt'] != null
+              ? DateTime.parse(json['rejectedAt'] as String)
+              : null,
     );
   }
 }
@@ -221,8 +216,10 @@ class GroupSettings {
       isPublic: isPublic ?? this.isPublic,
       requiresApproval: requiresApproval ?? this.requiresApproval,
       maxMembers: maxMembers ?? this.maxMembers,
-      allowGuestContributions: allowGuestContributions ?? this.allowGuestContributions,
-      autoApproveInvitations: autoApproveInvitations ?? this.autoApproveInvitations,
+      allowGuestContributions:
+          allowGuestContributions ?? this.allowGuestContributions,
+      autoApproveInvitations:
+          autoApproveInvitations ?? this.autoApproveInvitations,
       notificationSettings: notificationSettings ?? this.notificationSettings,
     );
   }
@@ -243,10 +240,11 @@ class GroupSettings {
       isPublic: json['isPublic'] as bool? ?? false,
       requiresApproval: json['requiresApproval'] as bool? ?? true,
       maxMembers: json['maxMembers'] as int? ?? 50,
-      allowGuestContributions: json['allowGuestContributions'] as bool? ?? false,
+      allowGuestContributions:
+          json['allowGuestContributions'] as bool? ?? false,
       autoApproveInvitations: json['autoApproveInvitations'] as bool? ?? false,
-      notificationSettings: json['notificationSettings'] as Map<String, dynamic>? ?? {},
+      notificationSettings:
+          json['notificationSettings'] as Map<String, dynamic>? ?? {},
     );
   }
 }
-

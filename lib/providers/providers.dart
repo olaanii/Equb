@@ -307,6 +307,24 @@ final equbGroupsProvider = StreamProvider<List<EqubGroup>>((ref) {
         if (kDebugMode && (raw == null || raw is! Map)) {
           final uid = authUser.uid;
           if (uid.isNotEmpty) {
+            bool demoSeedEnabled = false;
+            try {
+              final flag = await FirebaseDatabase.instance
+                  .ref('config/feature_flags/demoSeedEnabled')
+                  .get();
+              demoSeedEnabled = flag.value == true;
+            } catch (_) {
+              // If the flag cannot be read (permissions/offline), do not seed.
+              demoSeedEnabled = false;
+            }
+
+            if (!demoSeedEnabled) {
+              if (raw == null || raw is! Map) {
+                yield <EqubGroup>[];
+                continue;
+              }
+            }
+
             final seededFlag = FirebaseDatabase.instance.ref(
               'users/$uid/debug/demoSeeded',
             );

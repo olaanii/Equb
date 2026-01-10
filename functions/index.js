@@ -601,6 +601,100 @@ exports.superAdminSetGatewaySecret = functions.https.onCall(async (data, context
   return { ok: true };
 });
 
+// --- FenanPay (web CORS-safe intent creation) ---
+
+exports.fenanpayCreateIntent = functions.https.onCall(async (data, context) => {
+  // Any authenticated user can initiate a checkout; the secret is kept server-side.
+  assertAuthed(context);
+
+  const amount = Number(data && data.amount);
+  const currency = (data && data.currency ? String(data.currency) : 'ETB').trim() || 'ETB';
+  const paymentIntentUniqueId = (data && data.paymentIntentUniqueId ? String(data.paymentIntentUniqueId) : '').trim();
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'amount must be > 0');
+  }
+  if (!paymentIntentUniqueId) {
+    throw new functions.https.HttpsError('invalid-argument', 'paymentIntentUniqueId required');
+  }
+
+  const methods = Array.isArray(data && data.methods) ? data.methods.map(String) : [];
+  const returnUrl = (data && data.returnUrl ? String(data.returnUrl) : '').trim();
+  const expireIn = Math.max(60, Math.min(86400, Number((data && data.expireIn) || 3600)));
+  const commissionPaidByCustomer = !!(data && data.commissionPaidByCustomer);
+  const callbackUrl = (data && data.callbackUrl ? String(data.callbackUrl) : '').trim();
+
+  const db = admin.database();
+  const secretSnap = await db.ref('admin_config/gateway_secrets/fenanpay/secrets').get();
+  const secrets = secretSnap.exists() ? (secretSnap.val() || {}) : {};
+  const apiKey = (secrets.depositKey || secrets.apiKey || '').toString().trim();
+  if (!apiKey) {
+    throw new functions.https.HttpsError(
+      'failed-precondition',
+      'FenanPay deposit key not configured. Set admin_config/gateway_secrets/fenanpay/secrets.depositKey (or apiKey).'
+    );
+  }
+
+  const endpoint = 'https://api.fenanpay.com/api/v1/payment/sandbox/intent';
+  const body = {
+    amount,
+    currency,
+    paymentIntentUniqueId,
+    methods,
+    returnUrl,
+    expireIn,
+    commissionPaidByCustomer,
+    ...(callbackUrl ? { callbackUrl } : {}),
+    customerInfo: { name: context.auth.uid },
+  };
+
+  let resp;
+  try {
+    resp = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apiKey,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    throw new functions.https.HttpsError('internal', `FenanPay request failed: ${e}`);
+  }
+
+  const text = await resp.text();
+  if (!resp.ok) {
+    throw new functions.https.HttpsError('internal', `FenanPay intent failed: ${resp.status} ${text}`);
+  }
+
+  let decoded;
+  try {
+    decoded = JSON.parse(text);
+  } catch (_) {
+    throw new functions.https.HttpsError('internal', 'FenanPay response was not valid JSON');
+  }
+
+  // Match the client extractor loosely.
+  let checkoutUrl = '';
+  if (decoded && typeof decoded === 'object') {
+    const content = decoded.content;
+    if (typeof content === 'string') checkoutUrl = content.trim();
+    if (!checkoutUrl && content && typeof content === 'object') {
+      checkoutUrl =
+        (content.checkoutUrl || content.checkout_url || content.url || content.redirectUrl || content.redirect_url || '').toString().trim();
+    }
+    if (!checkoutUrl) {
+      checkoutUrl = (decoded.checkoutUrl || decoded.url || decoded.redirectUrl || '').toString().trim();
+    }
+  }
+
+  if (!checkoutUrl) {
+    throw new functions.https.HttpsError('internal', 'FenanPay response missing checkout URL');
+  }
+
+  return { ok: true, checkoutUrl };
+});
+
 // --- Advanced Admin Functions ---
 
 const {

@@ -1,5 +1,6 @@
 import 'package:equb/models/admin_audit.dart';
 import 'package:equb/providers/providers.dart';
+import 'package:equb/ui/responsive.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:equb/ui/widgets/common.dart';
 import 'package:flutter/material.dart';
@@ -353,7 +354,7 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
             Text('Failed to load audit logs: $error'),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () => ref.invalidateSelf(),
+              onPressed: () => setState(() {}),
               child: const Text('Retry'),
             ),
           ],

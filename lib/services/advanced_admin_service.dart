@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:equb/models/admin_audit.dart';
 import 'package:equb/models/user_model.dart';
@@ -37,7 +35,10 @@ class AdvancedAdminService {
         operationType: 'update_user_roles',
         targetType: 'users',
         filters: {'userIds': userIds},
-        actions: {'newRole': newRole.toString().split('.').last, 'reason': reason},
+        actions: {
+          'newRole': newRole.toString().split('.').last,
+          'reason': reason,
+        },
         status: 'pending',
         createdAt: DateTime.now(),
       );
@@ -118,7 +119,10 @@ class AdvancedAdminService {
         targetId: 'bulk_suspend_${DateTime.now().millisecondsSinceEpoch}',
         targetName: 'Bulk User Suspension',
         details: 'Suspending ${userIds.length} users',
-        metadata: {'reason': reason, 'suspensionEnd': suspensionEnd?.toIso8601String()},
+        metadata: {
+          'reason': reason,
+          'suspensionEnd': suspensionEnd?.toIso8601String(),
+        },
       );
 
       int successCount = 0;
@@ -137,7 +141,10 @@ class AdvancedAdminService {
             targetType: 'user',
             targetId: userId,
             details: 'User suspended: $reason',
-            metadata: {'reason': reason, 'suspensionEnd': suspensionEnd?.toIso8601String()},
+            metadata: {
+              'reason': reason,
+              'suspensionEnd': suspensionEnd?.toIso8601String(),
+            },
           );
         } catch (e) {
           failureCount++;
@@ -227,7 +234,9 @@ class AdvancedAdminService {
 
       if (result.data['success'] == true) {
         final logs = result.data['logs'] as List<dynamic>;
-        return logs.map((log) => AdminAuditLog.fromJson(log as Map<String, dynamic>)).toList();
+        return logs
+            .map((log) => AdminAuditLog.fromJson(log as Map<String, dynamic>))
+            .toList();
       }
 
       return [];
@@ -323,7 +332,10 @@ class AdvancedAdminService {
         targetId: 'emergency_shutdown',
         targetName: 'Emergency Shutdown',
         details: 'Emergency system shutdown initiated: $reason',
-        metadata: {'reason': reason, 'timestamp': DateTime.now().toIso8601String()},
+        metadata: {
+          'reason': reason,
+          'timestamp': DateTime.now().toIso8601String(),
+        },
       );
 
       final callable = functions.httpsCallable('emergencyShutdown');
@@ -345,7 +357,12 @@ class AdvancedAdminService {
   }
 
   /// Helper methods
-  Future<void> _updateUserRole(String userId, UserRole newRole, String adminId, String reason) async {
+  Future<void> _updateUserRole(
+    String userId,
+    UserRole newRole,
+    String adminId,
+    String reason,
+  ) async {
     // This would call the existing admin function
     final callable = functions.httpsCallable('adminSetUserRole');
     await callable.call({
@@ -354,7 +371,12 @@ class AdvancedAdminService {
     });
   }
 
-  Future<void> _suspendUser(String userId, String reason, DateTime? suspensionEnd, String adminId) async {
+  Future<void> _suspendUser(
+    String userId,
+    String reason,
+    DateTime? suspensionEnd,
+    String adminId,
+  ) async {
     // Mark user as suspended in database
     // This would require additional database schema
     logService.log(
@@ -421,4 +443,3 @@ class BulkOperationResult {
 
   bool get hasErrors => errors.isNotEmpty;
 }
-

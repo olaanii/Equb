@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:equb/models/equb_model.dart';
 import 'package:equb/services/payout_scheduler_service.dart';
+import 'package:flutter/foundation.dart';
 
 class RotationUpdate {
   const RotationUpdate({
@@ -145,7 +146,7 @@ class EqubRotationEngine {
           await _payoutScheduler!.triggerManualPayout(group.id);
         } catch (e) {
           // Log error but don't block the contribution registration
-          print('Failed to trigger payout for group ${group.id}: $e');
+          debugPrint('Failed to trigger payout for group ${group.id}: $e');
         }
       });
     }

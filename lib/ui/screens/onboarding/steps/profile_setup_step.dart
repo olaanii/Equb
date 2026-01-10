@@ -2,6 +2,7 @@ import 'package:equb/models/onboarding_state.dart';
 import 'package:equb/providers/providers.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:equb/ui/widgets/common.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -28,6 +29,7 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
   late TextEditingController _phoneController;
   final _formKey = GlobalKey<FormState>();
   bool _isSaving = false;
+  bool _isSkipping = false;
 
   @override
   void initState() {
@@ -54,15 +56,19 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
 
       // Update user profile in database
       final userRepository = ref.read(userRepositoryProvider);
-      await userRepository.updateUser(user.id, {
-        'displayName': _nameController.text.trim(),
-        'phoneNumber': _phoneController.text.trim(),
-      });
+      final trimmedName = _nameController.text.trim();
+      final trimmedPhone = _phoneController.text.trim();
+      await userRepository.updateUser(
+        user.copyWith(
+          name: trimmedName,
+          phone: trimmedPhone.isEmpty ? null : trimmedPhone,
+        ),
+      );
 
       // Update onboarding data
       final updatedData = widget.initialData.copyWith(
-        displayName: _nameController.text.trim(),
-        phoneNumber: _phoneController.text.trim(),
+        displayName: trimmedName,
+        phoneNumber: trimmedPhone,
       );
       widget.onDataChanged(updatedData);
 
@@ -76,6 +82,34 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _skipAccountSetup() async {
+    if (_isSkipping) return;
+    setState(() => _isSkipping = true);
+
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        throw Exception('Not signed in.');
+      }
+
+      final onboardingService = ref.read(onboardingServiceProvider);
+      await onboardingService.completeOnboarding(uid);
+
+      if (!mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (r) => false);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to skip setup: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSkipping = false);
       }
     }
   }
@@ -201,7 +235,7 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _isSaving ? null : _saveProfile,
+                onPressed: (_isSaving || _isSkipping) ? null : _saveProfile,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -218,6 +252,22 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
                         'Continue',
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            Center(
+              child: TextButton(
+                onPressed: (_isSaving || _isSkipping) ? null : _skipAccountSetup,
+                child:
+                    _isSkipping
+                        ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Text('Skip for now'),
               ),
             ),
 

@@ -3,6 +3,9 @@ import 'package:equb/services/toast_service.dart';
 import 'package:equb/ui/screens/auth/signup_screen.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:equb/ui/widgets/common.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth_platform_interface/firebase_auth_platform_interface.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -198,6 +201,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final codeController = TextEditingController();
     bool codeSent = false;
     bool isSubmitting = false;
+
+    String? verificationId;
+    ConfirmationResult? confirmationResult;
+
+    String normalizePhone(String input) {
+      final raw = input.replaceAll(' ', '').trim();
+      if (raw.isEmpty) return raw;
+      if (raw.startsWith('+')) return raw;
+      if (raw.startsWith('251')) return '+$raw';
+      if (raw.startsWith('0')) return '+251${raw.substring(1)}';
+      return raw;
+    }
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -258,7 +274,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 isSubmitting
                                     ? null
                                     : () async {
-                                      final phone = phoneController.text.trim();
+                                      final phone = normalizePhone(
+                                        phoneController.text,
+                                      );
                                       if (phone.length < 9) {
                                         ToastService.warning(
                                           context,
@@ -267,11 +285,75 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         return;
                                       }
                                       if (!codeSent) {
-                                        setSheetState(() => codeSent = true);
-                                        ToastService.info(
-                                          context,
-                                          'SMS code sent to $phone.',
-                                        );
+                                        setSheetState(() => isSubmitting = true);
+                                        try {
+                                          if (kIsWeb) {
+                                            final verifier = RecaptchaVerifier(
+                                              auth: FirebaseAuthPlatform.instance,
+                                              container: 'recaptcha-container',
+                                            );
+                                            confirmationResult =
+                                                await FirebaseAuth.instance
+                                                    .signInWithPhoneNumber(
+                                              phone,
+                                              verifier,
+                                            );
+                                          } else {
+                                            await FirebaseAuth.instance
+                                                .verifyPhoneNumber(
+                                              phoneNumber: phone,
+                                              verificationCompleted:
+                                                  (credential) async {
+                                                await FirebaseAuth.instance
+                                                    .signInWithCredential(
+                                                  credential,
+                                                );
+                                                if (!context.mounted) return;
+                                                if (Navigator.of(context)
+                                                    .canPop()) {
+                                                  Navigator.of(context).pop();
+                                                }
+                                                Navigator.of(context)
+                                                    .pushNamedAndRemoveUntil(
+                                                  '/',
+                                                  (r) => false,
+                                                );
+                                                ToastService.success(
+                                                  context,
+                                                  'Signed in successfully.',
+                                                );
+                                              },
+                                              verificationFailed: (e) {
+                                                throw e;
+                                              },
+                                              codeSent: (id, _) {
+                                                verificationId = id;
+                                              },
+                                              codeAutoRetrievalTimeout: (id) {
+                                                verificationId = id;
+                                              },
+                                            );
+                                          }
+
+                                          if (!context.mounted) return;
+                                          setSheetState(() => codeSent = true);
+                                          ToastService.info(
+                                            context,
+                                            'SMS code sent to $phone.',
+                                          );
+                                        } catch (e) {
+                                          if (!context.mounted) return;
+                                          ToastService.error(
+                                            context,
+                                            'Failed to send SMS code: $e',
+                                          );
+                                        } finally {
+                                          if (context.mounted) {
+                                            setSheetState(
+                                              () => isSubmitting = false,
+                                            );
+                                          }
+                                        }
                                         return;
                                       }
                                       if (codeController.text.trim().length <
@@ -283,32 +365,62 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         return;
                                       }
                                       setSheetState(() => isSubmitting = true);
-                                      final auth = ref.read(
-                                        authServiceProvider,
-                                      );
-                                      final user = await auth.signInWithPhone(
-                                        phone,
-                                        codeController.text.trim(),
-                                      );
-                                      if (!context.mounted) return;
-                                      if (user == null) {
-                                        setSheetState(
-                                          () => isSubmitting = false,
+                                      try {
+                                        final smsCode =
+                                            codeController.text.trim();
+                                        if (kIsWeb) {
+                                          final result =
+                                              await confirmationResult
+                                                  ?.confirm(smsCode);
+                                          if (result?.user == null) {
+                                            throw Exception(
+                                              'Verification failed.',
+                                            );
+                                          }
+                                        } else {
+                                          final id = verificationId;
+                                          if (id == null || id.isEmpty) {
+                                            throw Exception(
+                                              'Verification not initialized. Please resend the code.',
+                                            );
+                                          }
+                                          final credential =
+                                              PhoneAuthProvider.credential(
+                                            verificationId: id,
+                                            smsCode: smsCode,
+                                          );
+                                          await FirebaseAuth.instance
+                                              .signInWithCredential(
+                                            credential,
+                                          );
+                                        }
+
+                                        if (!context.mounted) return;
+                                        if (Navigator.of(context).canPop()) {
+                                          Navigator.of(context).pop();
+                                        }
+                                        Navigator.of(context)
+                                            .pushNamedAndRemoveUntil(
+                                          '/',
+                                          (r) => false,
                                         );
+                                        ToastService.success(
+                                          context,
+                                          'Signed in successfully.',
+                                        );
+                                      } catch (e) {
+                                        if (!context.mounted) return;
                                         ToastService.error(
                                           context,
-                                          'Unable to sign in with phone.',
+                                          'Unable to verify code: $e',
                                         );
-                                        return;
+                                      } finally {
+                                        if (context.mounted) {
+                                          setSheetState(
+                                            () => isSubmitting = false,
+                                          );
+                                        }
                                       }
-                                      // ref.read(currentUserProvider).value = user; // Removed
-                                      if (Navigator.of(context).canPop()) {
-                                        Navigator.of(context).pop();
-                                      }
-                                      ToastService.success(
-                                        context,
-                                        'Signed in as ${user.name}.',
-                                      );
                                     },
                           ),
                         ],

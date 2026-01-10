@@ -20,6 +20,14 @@ class RtdbEqubRepository implements EqubRepository {
 
   DatabaseReference get _groupsRef => _db.ref('groups');
 
+  Map<String, dynamic> _toRtdbGroupPayload(EqubGroup group) {
+    final payload = group.toJson();
+    payload['members'] = <String, dynamic>{
+      for (final uid in group.members) uid: true,
+    };
+    return payload;
+  }
+
   DatabaseReference _userRef(String userId) => _db.ref('users/$userId');
 
   String _notificationType(NotificationType type) =>
@@ -151,7 +159,7 @@ class RtdbEqubRepository implements EqubRepository {
         scheduleConfig: schedule,
         rotationState: rotation,
       );
-      await ref.set(group.toJson());
+      await ref.set(_toRtdbGroupPayload(group));
       return group;
     }, context: {'groupId': g.id, 'actingUserId': actingUserId});
   }
@@ -159,7 +167,7 @@ class RtdbEqubRepository implements EqubRepository {
   @override
   Future<EqubGroup> updateGroup(EqubGroup g, {String? actingUserId}) {
     return _guard('updateGroup', () async {
-      await _groupsRef.child(g.id).set(g.toJson());
+      await _groupsRef.child(g.id).set(_toRtdbGroupPayload(g));
       return g;
     }, context: {'groupId': g.id, 'actingUserId': actingUserId});
   }

@@ -125,7 +125,7 @@ class PayoutSchedulerService {
     // Sum up contributions from all members
     for (final memberId in group.members) {
       try {
-        final summary = await walletRepository.getWalletSummary(memberId);
+        await walletRepository.getWalletSummary(memberId);
         // In a real implementation, we'd track group-specific contributions
         // For now, assume each member has contributed their share
         totalPot += group.contributionAmount;
@@ -434,7 +434,7 @@ class PayoutSchedulerService {
             scheduledDate: record.scheduledFor,
             type: PayoutType.regular,
             status: PayoutStatus.completed,
-            createdAt: record.processedAt ?? record.scheduledFor,
+            createdAt: record.processedAt,
             processedAt: record.processedAt,
           ),
         );

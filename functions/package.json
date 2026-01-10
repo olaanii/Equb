@@ -4,6 +4,9 @@
   "engines": {
     "node": "18"
   },
+  "scripts": {
+    "migrate:rtdb:members": "node scripts/migrate_rtdb_group_members_to_map.js"
+  },
   "main": "index.js",
   "dependencies": {
     "firebase-admin": "^12.7.0",

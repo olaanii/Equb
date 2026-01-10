@@ -1,14 +1,9 @@
-import 'dart:convert';
-
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:equb/models/email_preferences.dart';
 import 'package:equb/services/system_log_service.dart';
 
 class EmailService {
-  EmailService({
-    required this.functions,
-    required this.logService,
-  });
+  EmailService({required this.functions, required this.logService});
 
   final FirebaseFunctions functions;
   final SystemLogService logService;
@@ -37,7 +32,10 @@ class EmailService {
   }
 
   /// Update user's email preferences
-  Future<bool> updateUserPreferences(String userId, EmailPreferences preferences) async {
+  Future<bool> updateUserPreferences(
+    String userId,
+    EmailPreferences preferences,
+  ) async {
     try {
       final callable = functions.httpsCallable('updateUserEmailPreferences');
       final result = await callable.call({
@@ -75,13 +73,14 @@ class EmailService {
         'to': userEmail,
         'subject': 'Equb Email Test',
         'html': '''
-          <h2>Hello ${userName}!</h2>
+          <h2>Hello $userName!</h2>
           <p>This is a test email to verify your email settings are working correctly.</p>
           <p>If you received this email, your email notifications are properly configured.</p>
           <br>
           <p>Best regards,<br>The Equb Team</p>
         ''',
-        'text': 'Hello $userName! This is a test email to verify your email settings.',
+        'text':
+            'Hello $userName! This is a test email to verify your email settings.',
       });
 
       final success = result.data['ok'] == true;
@@ -107,7 +106,11 @@ class EmailService {
   }
 
   /// Trigger welcome email (usually called automatically on user creation)
-  Future<bool> sendWelcomeEmail(String userId, String userEmail, String userName) async {
+  Future<bool> sendWelcomeEmail(
+    String userId,
+    String userEmail,
+    String userName,
+  ) async {
     try {
       final callable = functions.httpsCallable('sendWelcomeEmail');
       final result = await callable.call({
@@ -151,8 +154,14 @@ class EmailService {
       final result = await callable.call({
         'to': userEmail,
         'subject': 'Contribution Reminder: $groupName',
-        'html': _getContributionReminderHtml(userName, groupName, amount, dueDate),
-        'text': 'Hi $userName, your contribution of ETB $amount for $groupName is due on ${dueDate.toString()}.',
+        'html': _getContributionReminderHtml(
+          userName,
+          groupName,
+          amount,
+          dueDate,
+        ),
+        'text':
+            'Hi $userName, your contribution of ETB $amount for $groupName is due on ${dueDate.toString()}.',
       });
 
       final success = result.data['ok'] == true;
@@ -190,8 +199,14 @@ class EmailService {
       final result = await callable.call({
         'to': userEmail,
         'subject': 'Payout Received: $groupName',
-        'html': _getPayoutNotificationHtml(userName, groupName, amount, payoutDate),
-        'text': 'Congratulations $userName! You received ETB $amount from $groupName on ${payoutDate.toString()}.',
+        'html': _getPayoutNotificationHtml(
+          userName,
+          groupName,
+          amount,
+          payoutDate,
+        ),
+        'text':
+            'Congratulations $userName! You received ETB $amount from $groupName on ${payoutDate.toString()}.',
       });
 
       final success = result.data['ok'] == true;
@@ -217,17 +232,19 @@ class EmailService {
   }
 
   /// Get email notification history for a user
-  Future<List<EmailNotification>> getEmailHistory(String userId, {int limit = 50}) async {
+  Future<List<EmailNotification>> getEmailHistory(
+    String userId, {
+    int limit = 50,
+  }) async {
     try {
       final callable = functions.httpsCallable('getUserEmailHistory');
-      final result = await callable.call({
-        'userId': userId,
-        'limit': limit,
-      });
+      final result = await callable.call({'userId': userId, 'limit': limit});
 
       if (result.data['success'] == true) {
         final emails = result.data['emails'] as List<dynamic>;
-        return emails.map((e) => EmailNotification.fromJson(e as Map<String, dynamic>)).toList();
+        return emails
+            .map((e) => EmailNotification.fromJson(e as Map<String, dynamic>))
+            .toList();
       }
 
       return [];
@@ -243,10 +260,17 @@ class EmailService {
   }
 
   /// Unsubscribe from a specific email type
-  Future<bool> unsubscribeFromEmailType(String userId, EmailType emailType) async {
+  Future<bool> unsubscribeFromEmailType(
+    String userId,
+    EmailType emailType,
+  ) async {
     try {
       final preferences = await getUserPreferences(userId);
-      final updatedPreferences = _updatePreferenceForType(preferences, emailType, EmailFrequency.never);
+      final updatedPreferences = _updatePreferenceForType(
+        preferences,
+        emailType,
+        EmailFrequency.never,
+      );
 
       return updateUserPreferences(userId, updatedPreferences);
     } catch (e) {
@@ -289,7 +313,12 @@ class EmailService {
     }
   }
 
-  String _getContributionReminderHtml(String userName, String groupName, double amount, DateTime dueDate) {
+  String _getContributionReminderHtml(
+    String userName,
+    String groupName,
+    double amount,
+    DateTime dueDate,
+  ) {
     return '''
       <!DOCTYPE html>
       <html>
@@ -323,7 +352,12 @@ class EmailService {
     ''';
   }
 
-  String _getPayoutNotificationHtml(String userName, String groupName, double amount, DateTime payoutDate) {
+  String _getPayoutNotificationHtml(
+    String userName,
+    String groupName,
+    double amount,
+    DateTime payoutDate,
+  ) {
     return '''
       <!DOCTYPE html>
       <html>
@@ -356,4 +390,3 @@ class EmailService {
     ''';
   }
 }
-
