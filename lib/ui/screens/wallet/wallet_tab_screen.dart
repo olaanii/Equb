@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:equb/models/equb_model.dart';
 import 'package:equb/models/user_model.dart';
 import 'package:equb/providers/providers.dart';
+import 'package:equb/ui/screens/wallet/deposit_screen.dart';
 
 class WalletTabScreen extends ConsumerStatefulWidget {
   const WalletTabScreen({super.key});
@@ -67,7 +68,13 @@ class _WalletTabScreenState extends ConsumerState<WalletTabScreen> {
                     children: [
                       Expanded(
                         child: FilledButton.icon(
-                          onPressed: () {},
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const DepositScreen(),
+                              ),
+                            );
+                          },
                           icon: const Icon(Icons.add_rounded),
                           label: const Text('Top up'),
                         ),

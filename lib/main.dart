@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:equb/services/notification_service.dart';
 import 'package:equb/services/secure_storage_service.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:equb/providers/app_providers.dart';
@@ -32,6 +33,22 @@ void main() async {
   } catch (e) {
     debugPrint('Firebase initialization failed: $e');
     firebaseError = e.toString();
+  }
+
+  if (firebaseInitialized && !kReleaseMode) {
+    const useEmulators = bool.fromEnvironment(
+      'USE_FIREBASE_EMULATORS',
+      defaultValue: false,
+    );
+    if (useEmulators) {
+      try {
+        final host = kIsWeb ? 'localhost' : '10.0.2.2';
+        FirebaseFunctions.instance.useFunctionsEmulator(host, 5001);
+        debugPrint('Using Firebase Functions emulator at $host:5001');
+      } catch (e) {
+        debugPrint('Failed to configure Functions emulator: $e');
+      }
+    }
   }
 
   // Initialize notification service if Firebase is available (optional)
@@ -189,12 +206,14 @@ class EqubApp extends ConsumerWidget {
               break;
             }
             final group = settings.arguments as GroupModel?;
-            page = group != null
-                ? GroupSettingsScreen(group: group)
-                : const AuthWrapper();
+            page =
+                group != null
+                    ? GroupSettingsScreen(group: group)
+                    : const AuthWrapper();
             break;
           case '/group-invitations':
-            page = kDebugMode ? const GroupInvitationsScreen() : const HomeShell();
+            page =
+                kDebugMode ? const GroupInvitationsScreen() : const HomeShell();
             break;
           default:
             page = const AuthWrapper();

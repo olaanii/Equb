@@ -11,7 +11,8 @@ class AdvancedAdminDashboard extends ConsumerStatefulWidget {
   const AdvancedAdminDashboard({super.key});
 
   @override
-  ConsumerState<AdvancedAdminDashboard> createState() => _AdvancedAdminDashboardState();
+  ConsumerState<AdvancedAdminDashboard> createState() =>
+      _AdvancedAdminDashboardState();
 }
 
 class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
@@ -98,8 +99,13 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
                 Row(
                   children: [
                     Icon(
-                      stats.systemHealth > 0.9 ? Icons.health_and_safety : Icons.warning,
-                      color: stats.systemHealth > 0.9 ? Colors.green : Colors.orange,
+                      stats.systemHealth > 0.9
+                          ? Icons.health_and_safety
+                          : Icons.warning,
+                      color:
+                          stats.systemHealth > 0.9
+                              ? Colors.green
+                              : Colors.orange,
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -109,8 +115,13 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
                     const Spacer(),
                     Text(
                       '${(stats.systemHealth * 100).round()}%',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: stats.systemHealth > 0.9 ? Colors.green : Colors.orange,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.headlineSmall?.copyWith(
+                        color:
+                            stats.systemHealth > 0.9
+                                ? Colors.green
+                                : Colors.orange,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -165,7 +176,8 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
               value: stats.pendingVerifications.toString(),
               subtitle: 'awaiting review',
               icon: Icons.pending_actions,
-              color: stats.pendingVerifications > 10 ? Colors.red : Colors.orange,
+              color:
+                  stats.pendingVerifications > 10 ? Colors.red : Colors.orange,
             ),
           ],
         ),
@@ -185,17 +197,23 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 12),
-                  ...stats.recentAlerts.map((alert) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(Icons.info_outline, size: 16, color: Colors.blue),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(alert)),
-                      ],
+                  ...stats.recentAlerts.map(
+                    (alert) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: Colors.blue,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(alert)),
+                        ],
+                      ),
                     ),
-                  )),
+                  ),
                 ],
               ),
             ),
@@ -336,30 +354,32 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
     );
 
     return auditLogsAsync.when(
-      data: (logs) => ListView.builder(
-        padding: AppSpacing.pagePaddingMobile,
-        itemCount: logs.length,
-        itemBuilder: (context, index) {
-          final log = logs[index];
-          return _AuditLogCard(log: log);
-        },
-      ),
+      data:
+          (logs) => ListView.builder(
+            padding: AppSpacing.pagePaddingMobile,
+            itemCount: logs.length,
+            itemBuilder: (context, index) {
+              final log = logs[index];
+              return _AuditLogCard(log: log);
+            },
+          ),
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 48),
-            const SizedBox(height: 16),
-            Text('Failed to load audit logs: $error'),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => setState(() {}),
-              child: const Text('Retry'),
+      error:
+          (error, _) => Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.error_outline, size: 48),
+                const SizedBox(height: 16),
+                Text('Failed to load audit logs: $error'),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => setState(() {}),
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 
@@ -382,7 +402,8 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
                 _ComplianceReportCard(
                   title: 'KYC Compliance Report',
                   description: 'User verification and identity compliance',
-                  onGenerate: () => _generateComplianceReportOfType('kyc_compliance'),
+                  onGenerate:
+                      () => _generateComplianceReportOfType('kyc_compliance'),
                 ),
 
                 const SizedBox(height: 12),
@@ -390,7 +411,10 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
                 _ComplianceReportCard(
                   title: 'Transaction Monitoring',
                   description: 'Suspicious activity and transaction patterns',
-                  onGenerate: () => _generateComplianceReportOfType('transaction_monitoring'),
+                  onGenerate:
+                      () => _generateComplianceReportOfType(
+                        'transaction_monitoring',
+                      ),
                 ),
 
                 const SizedBox(height: 12),
@@ -398,7 +422,8 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
                 _ComplianceReportCard(
                   title: 'Risk Assessment',
                   description: 'Overall system risk evaluation',
-                  onGenerate: () => _generateComplianceReportOfType('risk_assessment'),
+                  onGenerate:
+                      () => _generateComplianceReportOfType('risk_assessment'),
                 ),
               ],
             ),
@@ -447,7 +472,11 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
     );
   }
 
-  Widget _buildComplianceItem(String title, String description, bool compliant) {
+  Widget _buildComplianceItem(
+    String title,
+    String description,
+    bool compliant,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -464,14 +493,11 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
                 ),
-                Text(
-                  description,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                Text(description, style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
           ),
@@ -481,15 +507,15 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
   }
 
   void _showBulkUserManagement(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const BulkUserManagementScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const BulkUserManagementScreen()));
   }
 
   void _showSystemMaintenance(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SystemMaintenanceScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SystemMaintenanceScreen()));
   }
 
   void _generateComplianceReport() {
@@ -547,14 +573,18 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
   void _showBulkGroupMaintenance(BuildContext context) {
     // TODO: Implement bulk group maintenance screen
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Bulk group maintenance not yet implemented')),
+      const SnackBar(
+        content: Text('Bulk group maintenance not yet implemented'),
+      ),
     );
   }
 
   void _showBulkPayoutAdjustments(BuildContext context) {
     // TODO: Implement bulk payout adjustments screen
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Bulk payout adjustments not yet implemented')),
+      const SnackBar(
+        content: Text('Bulk payout adjustments not yet implemented'),
+      ),
     );
   }
 
@@ -607,9 +637,9 @@ class _MetricCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             Text(
@@ -665,25 +695,21 @@ class _BulkOperationCard extends StatelessWidget {
                 color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(
-                icon,
-                color: Theme.of(context).colorScheme.primary,
-              ),
+              child: Icon(icon, color: Theme.of(context).colorScheme.primary),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  Text(title, style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Text(
                     description,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withOpacity(0.7),
                     ),
                   ),
                 ],
@@ -741,7 +767,10 @@ class _AuditLogCard extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _getSeverityColor(log.severity).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -758,10 +787,7 @@ class _AuditLogCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              log.details,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            Text(log.details, style: Theme.of(context).textTheme.bodyMedium),
             if (log.targetName != null) ...[
               const SizedBox(height: 4),
               Text(
@@ -857,15 +883,14 @@ class _ComplianceReportCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+                  Text(title, style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Text(
                     description,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withOpacity(0.7),
                     ),
                   ),
                 ],
@@ -892,7 +917,9 @@ class BulkUserManagementScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Bulk User Management')),
       body: const Center(
-        child: Text('Bulk user management functionality\n(Not yet implemented)'),
+        child: Text(
+          'Bulk user management functionality\n(Not yet implemented)',
+        ),
       ),
     );
   }
@@ -911,4 +938,3 @@ class SystemMaintenanceScreen extends StatelessWidget {
     );
   }
 }
-

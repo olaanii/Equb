@@ -2,11 +2,7 @@ import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:flutter/material.dart';
 
 class WelcomeStep extends StatelessWidget {
-  const WelcomeStep({
-    super.key,
-    required this.onNext,
-    required this.onSkip,
-  });
+  const WelcomeStep({super.key, required this.onNext, required this.onSkip});
 
   final VoidCallback onNext;
   final VoidCallback onSkip;
@@ -28,11 +24,7 @@ class WelcomeStep extends StatelessWidget {
               color: scheme.primary.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.groups,
-              size: 80,
-              color: scheme.primary,
-            ),
+            child: Icon(Icons.groups, size: 80, color: scheme.primary),
           ),
 
           const SizedBox(height: 32),
@@ -142,11 +134,7 @@ class WelcomeStep extends StatelessWidget {
             color: scheme.primary.withOpacity(0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(
-            icon,
-            color: scheme.primary,
-            size: 20,
-          ),
+          child: Icon(icon, color: scheme.primary, size: 20),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -155,9 +143,9 @@ class WelcomeStep extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 2),
               Text(
@@ -173,4 +161,3 @@ class WelcomeStep extends StatelessWidget {
     );
   }
 }
-

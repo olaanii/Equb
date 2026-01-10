@@ -309,9 +309,10 @@ final equbGroupsProvider = StreamProvider<List<EqubGroup>>((ref) {
           if (uid.isNotEmpty) {
             bool demoSeedEnabled = false;
             try {
-              final flag = await FirebaseDatabase.instance
-                  .ref('config/feature_flags/demoSeedEnabled')
-                  .get();
+              final flag =
+                  await FirebaseDatabase.instance
+                      .ref('config/feature_flags/demoSeedEnabled')
+                      .get();
               demoSeedEnabled = flag.value == true;
             } catch (_) {
               // If the flag cannot be read (permissions/offline), do not seed.

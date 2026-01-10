@@ -14,7 +14,8 @@ class GroupAnalyticsScreen extends ConsumerStatefulWidget {
   const GroupAnalyticsScreen({super.key, required this.groupId});
 
   @override
-  ConsumerState<GroupAnalyticsScreen> createState() => _GroupAnalyticsScreenState();
+  ConsumerState<GroupAnalyticsScreen> createState() =>
+      _GroupAnalyticsScreenState();
 }
 
 class _GroupAnalyticsScreenState extends ConsumerState<GroupAnalyticsScreen> {
@@ -25,7 +26,10 @@ class _GroupAnalyticsScreenState extends ConsumerState<GroupAnalyticsScreen> {
     final analyticsAsync = ref.watch(
       FutureProvider((ref) async {
         final service = ref.watch(groupAnalyticsServiceProvider);
-        return service.generateAnalytics(widget.groupId, timeframe: _selectedTimeframe);
+        return service.generateAnalytics(
+          widget.groupId,
+          timeframe: _selectedTimeframe,
+        );
       }),
     );
 
@@ -37,35 +41,38 @@ class _GroupAnalyticsScreenState extends ConsumerState<GroupAnalyticsScreen> {
             onSelected: (timeframe) {
               setState(() => _selectedTimeframe = timeframe);
             },
-            itemBuilder: (context) => AnalyticsTimeframe.values.map((timeframe) {
-              return PopupMenuItem(
-                value: timeframe,
-                child: Text(timeframe.label),
-              );
-            }).toList(),
+            itemBuilder:
+                (context) =>
+                    AnalyticsTimeframe.values.map((timeframe) {
+                      return PopupMenuItem(
+                        value: timeframe,
+                        child: Text(timeframe.label),
+                      );
+                    }).toList(),
           ),
         ],
       ),
       body: analyticsAsync.when(
         data: (analytics) => _buildAnalyticsView(analytics),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.red),
-              const SizedBox(height: 16),
-              const Text('Failed to load analytics'),
-              const SizedBox(height: 8),
-              Text(error.toString(), textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => setState(() {}),
-                child: const Text('Retry'),
+        error:
+            (error, _) => Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                  const SizedBox(height: 16),
+                  const Text('Failed to load analytics'),
+                  const SizedBox(height: 8),
+                  Text(error.toString(), textAlign: TextAlign.center),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => setState(() {}),
+                    child: const Text('Retry'),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
       ),
     );
   }
@@ -151,16 +158,18 @@ class _HealthScoreCard extends StatelessWidget {
                   children: [
                     Text(
                       '$healthScore%',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      style: Theme.of(
+                        context,
+                      ).textTheme.headlineMedium?.copyWith(
                         color: healthColor,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     Text(
                       _getHealthLabel(analytics.healthScore),
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: healthColor,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: healthColor),
                     ),
                   ],
                 ),
@@ -231,9 +240,10 @@ class _OverviewCards extends StatelessWidget {
         ),
         _OverviewCard(
           title: 'Next Payout',
-          value: analytics.nextPayoutDate != null
-              ? DateFormat('MMM d').format(analytics.nextPayoutDate!)
-              : 'N/A',
+          value:
+              analytics.nextPayoutDate != null
+                  ? DateFormat('MMM d').format(analytics.nextPayoutDate!)
+                  : 'N/A',
           subtitle: '${analytics.daysUntilNextPayout} days',
           icon: Icons.calendar_today,
           color: Colors.orange,
@@ -284,9 +294,9 @@ class _OverviewCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             Text(
@@ -361,12 +371,7 @@ class _ContributionAnalytics extends StatelessWidget {
             const SizedBox(height: 16),
 
             // Contribution trend chart
-            SizedBox(
-              height: 200,
-              child: LineChart(
-                _buildContributionChart(),
-              ),
-            ),
+            SizedBox(height: 200, child: LineChart(_buildContributionChart())),
 
             const SizedBox(height: 16),
 
@@ -397,10 +402,11 @@ class _ContributionAnalytics extends StatelessWidget {
   }
 
   LineChartData _buildContributionChart() {
-    final spots = analytics.contributionTrend.asMap().entries.map((entry) {
-      final point = entry.value;
-      return FlSpot(entry.key.toDouble(), point.amount);
-    }).toList();
+    final spots =
+        analytics.contributionTrend.asMap().entries.map((entry) {
+          final point = entry.value;
+          return FlSpot(entry.key.toDouble(), point.amount);
+        }).toList();
 
     return LineChartData(
       gridData: FlGridData(show: false),
@@ -531,7 +537,8 @@ class _MemberAnalytics extends StatelessWidget {
 
             // Member stats
             ...analytics.memberStats.take(5).map((member) {
-              final activityLevel = analytics.activityLevels[member.memberId] ?? 0.0;
+              final activityLevel =
+                  analytics.activityLevels[member.memberId] ?? 0.0;
               final riskProfile = analytics.riskProfiles[member.memberId];
 
               return Padding(
@@ -544,9 +551,8 @@ class _MemberAnalytics extends StatelessWidget {
                         children: [
                           Text(
                             member.memberId,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w500),
                           ),
                           Text(
                             'Contributed: ETB ${member.totalContributions.toStringAsFixed(0)}',
@@ -556,15 +562,24 @@ class _MemberAnalytics extends StatelessWidget {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
-                        color: activityLevel > 0.7 ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                        color:
+                            activityLevel > 0.7
+                                ? Colors.green.withOpacity(0.1)
+                                : Colors.orange.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         activityLevel > 0.7 ? 'Active' : 'Inactive',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: activityLevel > 0.7 ? Colors.green : Colors.orange,
+                          color:
+                              activityLevel > 0.7
+                                  ? Colors.green
+                                  : Colors.orange,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -605,7 +620,12 @@ class _RiskFactorsCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             ...riskFactors.map((factor) {
-              final severityColor = factor.severity > 0.7 ? Colors.red : factor.severity > 0.5 ? Colors.orange : Colors.yellow;
+              final severityColor =
+                  factor.severity > 0.7
+                      ? Colors.red
+                      : factor.severity > 0.5
+                      ? Colors.orange
+                      : Colors.yellow;
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -626,9 +646,8 @@ class _RiskFactorsCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             factor.description,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w500,
-                            ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w500),
                           ),
                         ),
                       ],
@@ -697,9 +716,9 @@ class _TrendsCard extends StatelessWidget {
               const SizedBox(height: 16),
               Text(
                 'Predicted Next Payout: ${DateFormat('MMM d, yyyy').format(trends.predictedNextPayout!)}',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
               ),
             ],
           ],
@@ -778,13 +797,12 @@ class _MetricItem extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: color.withOpacity(0.8),
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: color.withOpacity(0.8)),
           ),
         ],
       ),
     );
   }
 }
-

@@ -11,16 +11,16 @@ Notes:
 - Writes only the `members` field.
 */
 
-const admin = require('firebase-admin');
+const admin = require("firebase-admin");
 
 function parseArgs(argv) {
   const args = {};
   for (let i = 2; i < argv.length; i++) {
     const token = argv[i];
-    if (!token.startsWith('--')) continue;
+    if (!token.startsWith("--")) continue;
     const key = token.slice(2);
     const next = argv[i + 1];
-    if (next && !next.startsWith('--')) {
+    if (next && !next.startsWith("--")) {
       args[key] = next;
       i++;
     } else {
@@ -34,12 +34,12 @@ function membersToMap(members) {
   if (!members) return null;
 
   // Already canonical map.
-  if (typeof members === 'object' && !Array.isArray(members)) {
+  if (typeof members === "object" && !Array.isArray(members)) {
     const result = {};
     for (const [k, v] of Object.entries(members)) {
       if (k && v === true) result[k] = true;
       if (k && v === 1) result[k] = true;
-      if (k && v === 'true') result[k] = true;
+      if (k && v === "true") result[k] = true;
     }
     return Object.keys(result).length ? result : {};
   }
@@ -48,7 +48,7 @@ function membersToMap(members) {
   if (Array.isArray(members)) {
     const result = {};
     for (const uid of members) {
-      if (typeof uid === 'string' && uid.trim()) {
+      if (typeof uid === "string" && uid.trim()) {
         result[uid.trim()] = true;
       }
     }
@@ -66,7 +66,7 @@ function inferMembersFromPreferredOrder(group) {
 
 function inferMembersFromRotationState(group) {
   const state = group?.rotationState;
-  if (!state || typeof state !== 'object') return null;
+  if (!state || typeof state !== "object") return null;
 
   const inferred = [];
 
@@ -76,7 +76,7 @@ function inferMembersFromRotationState(group) {
   }
 
   const progress = state.contributionProgress;
-  if (progress && typeof progress === 'object' && !Array.isArray(progress)) {
+  if (progress && typeof progress === "object" && !Array.isArray(progress)) {
     for (const uid of Object.keys(progress)) inferred.push(uid);
   }
 
@@ -91,9 +91,9 @@ async function main() {
   const dryRun = !!args.dryRun || !commit;
 
   if (!serviceAccountPath || !databaseURL) {
-    console.error('Missing required args.');
-    console.error('Required: --serviceAccount <path> --databaseURL <url>');
-    console.error('Optional: --dryRun (default) | --commit');
+    console.error("Missing required args.");
+    console.error("Required: --serviceAccount <path> --databaseURL <url>");
+    console.error("Optional: --dryRun (default) | --commit");
     process.exit(2);
   }
 
@@ -105,12 +105,12 @@ async function main() {
   });
 
   const db = admin.database();
-  const groupsRef = db.ref('groups');
+  const groupsRef = db.ref("groups");
 
   const snap = await groupsRef.get();
   const raw = snap.val();
-  if (!raw || typeof raw !== 'object') {
-    console.log('No groups found.');
+  if (!raw || typeof raw !== "object") {
+    console.log("No groups found.");
     return;
   }
 
@@ -130,7 +130,7 @@ async function main() {
   for (const [groupId, group] of Object.entries(raw)) {
     stats.total++;
 
-    if (!group || typeof group !== 'object') {
+    if (!group || typeof group !== "object") {
       stats.skippedMalformed++;
       continue;
     }
@@ -140,7 +140,7 @@ async function main() {
     // Detect canonical: map with at least one key, or empty map.
     const isCanonicalMap =
       currentMembers &&
-      typeof currentMembers === 'object' &&
+      typeof currentMembers === "object" &&
       !Array.isArray(currentMembers);
 
     if (isCanonicalMap) {
@@ -152,20 +152,20 @@ async function main() {
     let reason = null;
 
     if (Array.isArray(currentMembers)) {
-      reason = 'list';
+      reason = "list";
     }
 
     if (!nextMembersMap) {
       nextMembersMap = inferMembersFromPreferredOrder(group);
       if (nextMembersMap) {
-        reason = 'preferredOrder';
+        reason = "preferredOrder";
       }
     }
 
     if (!nextMembersMap) {
       nextMembersMap = inferMembersFromRotationState(group);
       if (nextMembersMap) {
-        reason = 'rotationState';
+        reason = "rotationState";
       }
     }
 
@@ -174,7 +174,7 @@ async function main() {
       flagged.push({
         groupId,
         name: group.name ?? null,
-        reason: 'missing-or-empty-members',
+        reason: "missing-or-empty-members",
       });
       continue;
     }
@@ -182,22 +182,22 @@ async function main() {
     if (dryRun) {
       // No write.
     } else {
-      await groupsRef.child(groupId).child('members').set(nextMembersMap);
+      await groupsRef.child(groupId).child("members").set(nextMembersMap);
       stats.writes++;
     }
 
-    if (reason === 'list') stats.migratedFromList++;
-    if (reason === 'preferredOrder') stats.inferredFromPreferredOrder++;
-    if (reason === 'rotationState') stats.inferredFromRotationState++;
+    if (reason === "list") stats.migratedFromList++;
+    if (reason === "preferredOrder") stats.inferredFromPreferredOrder++;
+    if (reason === "rotationState") stats.inferredFromRotationState++;
   }
 
-  console.log('--- RTDB members migration report ---');
-  console.log(`Mode: ${dryRun ? 'DRY RUN' : 'COMMIT'}`);
+  console.log("--- RTDB members migration report ---");
+  console.log(`Mode: ${dryRun ? "DRY RUN" : "COMMIT"}`);
   console.log(stats);
   if (flagged.length) {
-    console.log('Flagged groups (missing/empty members):');
+    console.log("Flagged groups (missing/empty members):");
     for (const f of flagged.slice(0, 50)) {
-      console.log(`- ${f.groupId} (${f.name ?? 'no-name'})`);
+      console.log(`- ${f.groupId} (${f.name ?? "no-name"})`);
     }
     if (flagged.length > 50) {
       console.log(`...and ${flagged.length - 50} more`);
@@ -206,6 +206,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  console.error('Migration failed:', e);
+  console.error("Migration failed:", e);
   process.exit(1);
 });

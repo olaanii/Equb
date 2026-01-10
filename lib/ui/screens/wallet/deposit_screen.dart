@@ -1,4 +1,5 @@
 import 'package:equb/providers/providers.dart';
+import 'package:equb/services/gateway_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -87,25 +88,19 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                _SummaryRow(
-                  label: 'Fees',
-                  value: 'ETB 0.00',
-                ),
-                _SummaryRow(
-                  label: 'ETA',
-                  value: 'Instant',
-                ),
-                _SummaryRow(
-                  label: 'Destination',
-                  value: 'Wallet credit',
-                ),
+                _SummaryRow(label: 'Fees', value: 'ETB 0.00'),
+                _SummaryRow(label: 'ETA', value: 'Instant'),
+                _SummaryRow(label: 'Destination', value: 'Wallet credit'),
               ],
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
           PrimaryButton(
             label: _submitting ? 'Starting checkout…' : 'Proceed to pay',
-            onPressed: _submitting ? null : _handlePay,
+            onPressed: () {
+              if (_submitting) return;
+              _handlePay();
+            },
           ),
         ],
       ),
@@ -163,9 +158,7 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
         SnackBar(content: Text('FenanPay API key missing: ${err.message}')),
       );
     } catch (err) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Deposit error: $err')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('Deposit error: $err')));
     } finally {
       if (mounted) {
         setState(() => _submitting = false);

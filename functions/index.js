@@ -1,58 +1,73 @@
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
 
 admin.initializeApp();
 
 function assertAuthed(context) {
   if (!context.auth || !context.auth.uid) {
-    throw new functions.https.HttpsError('unauthenticated', 'Sign in required.');
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "Sign in required."
+    );
   }
   return context.auth.uid;
 }
 
 function isPlainObject(value) {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
+  return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 function inferCycle(days) {
   const d = Number(days || 30);
-  if (d === 1) return 'daily';
-  if (d === 7) return 'weekly';
-  if (d === 14) return 'biWeekly';
-  if ([28, 29, 30, 31].includes(d)) return 'monthly';
-  return 'custom';
+  if (d === 1) return "daily";
+  if (d === 7) return "weekly";
+  if (d === 14) return "biWeekly";
+  if ([28, 29, 30, 31].includes(d)) return "monthly";
+  return "custom";
 }
 
 async function assertAdminUid(db, callerUid) {
   const adminSnap = await db.ref(`admins/${callerUid}`).get();
   if (adminSnap.exists() && adminSnap.val() === true) return;
-  throw new functions.https.HttpsError('permission-denied', 'Admin privileges required.');
+  throw new functions.https.HttpsError(
+    "permission-denied",
+    "Admin privileges required."
+  );
 }
 
 async function assertSuperAdminUid(db, callerUid) {
   const snap = await db.ref(`superadmins/${callerUid}`).get();
   if (snap.exists() && snap.val() === true) return;
-  throw new functions.https.HttpsError('permission-denied', 'Super admin privileges required.');
+  throw new functions.https.HttpsError(
+    "permission-denied",
+    "Super admin privileges required."
+  );
 }
 
 exports.bootstrapAdmin = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
-  const setupCode = (data && data.setupCode ? String(data.setupCode) : '').trim();
+  const setupCode = (
+    data && data.setupCode ? String(data.setupCode) : ""
+  ).trim();
 
   // Prefer Firebase Functions config: firebase functions:config:set app.admin_setup_code="..."
-  const expected = (functions.config().app && functions.config().app.admin_setup_code)
-    ? String(functions.config().app.admin_setup_code).trim()
-    : '';
+  const expected =
+    functions.config().app && functions.config().app.admin_setup_code
+      ? String(functions.config().app.admin_setup_code).trim()
+      : "";
 
   if (!expected) {
     throw new functions.https.HttpsError(
-      'failed-precondition',
-      'Admin bootstrap is not configured. Set functions config app.admin_setup_code.'
+      "failed-precondition",
+      "Admin bootstrap is not configured. Set functions config app.admin_setup_code."
     );
   }
 
   if (!setupCode || setupCode !== expected) {
-    throw new functions.https.HttpsError('permission-denied', 'Invalid setup code.');
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Invalid setup code."
+    );
   }
 
   const db = admin.database();
@@ -66,13 +81,18 @@ exports.bootstrapAdmin = functions.https.onCall(async (data, context) => {
 exports.adminReviewDeposit = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
 
-  const targetUserId = (data && data.targetUserId ? String(data.targetUserId) : '').trim();
-  const txId = (data && data.txId ? String(data.txId) : '').trim();
-  const action = (data && data.action ? String(data.action) : '').trim();
-  const reason = (data && data.reason ? String(data.reason) : '').trim();
+  const targetUserId = (
+    data && data.targetUserId ? String(data.targetUserId) : ""
+  ).trim();
+  const txId = (data && data.txId ? String(data.txId) : "").trim();
+  const action = (data && data.action ? String(data.action) : "").trim();
+  const reason = (data && data.reason ? String(data.reason) : "").trim();
 
-  if (!targetUserId || !txId || (action !== 'approve' && action !== 'reject')) {
-    throw new functions.https.HttpsError('invalid-argument', 'targetUserId, txId, action required.');
+  if (!targetUserId || !txId || (action !== "approve" && action !== "reject")) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "targetUserId, txId, action required."
+    );
   }
 
   const db = admin.database();
@@ -85,23 +105,31 @@ exports.adminReviewDeposit = functions.https.onCall(async (data, context) => {
 
   const txSnap = await txRef.get();
   if (!txSnap.exists()) {
-    throw new functions.https.HttpsError('not-found', 'Transaction not found.');
+    throw new functions.https.HttpsError("not-found", "Transaction not found.");
   }
 
   const tx = txSnap.val() || {};
-  const status = (tx.status || '').toString();
-  const toUserId = (tx.toUserId || '').toString();
+  const status = (tx.status || "").toString();
+  const toUserId = (tx.toUserId || "").toString();
   const requiresReview = tx.requiresReview === true;
 
-  if (toUserId !== 'wallet' || !requiresReview) {
-    throw new functions.https.HttpsError('failed-precondition', 'Transaction is not a reviewable deposit.');
+  if (toUserId !== "wallet" || !requiresReview) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Transaction is not a reviewable deposit."
+    );
   }
 
   // Idempotent handling
-  if (action === 'approve' && status === 'success') return { ok: true, already: true, status: 'success' };
-  if (action === 'reject' && status === 'failed') return { ok: true, already: true, status: 'failed' };
-  if (status !== 'pending') {
-    throw new functions.https.HttpsError('failed-precondition', `Transaction status is ${status}.`);
+  if (action === "approve" && status === "success")
+    return { ok: true, already: true, status: "success" };
+  if (action === "reject" && status === "failed")
+    return { ok: true, already: true, status: "failed" };
+  if (status !== "pending") {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      `Transaction status is ${status}.`
+    );
   }
 
   const amount = Number(tx.amount || 0);
@@ -112,88 +140,91 @@ exports.adminReviewDeposit = functions.https.onCall(async (data, context) => {
   const points = Math.max(0, Math.floor(amount / 10));
 
   const nowMs = admin.database.ServerValue.TIMESTAMP;
-  const notificationId = userRef.child('notifications').push().key;
-  const ledgerId = userRef.child('points_ledger').push().key;
+  const notificationId = userRef.child("notifications").push().key;
+  const ledgerId = userRef.child("points_ledger").push().key;
 
   const result = await userRef.transaction((current) => {
-    if (!current || typeof current !== 'object') return;
+    if (!current || typeof current !== "object") return;
 
     const walletBalance = Number(current.walletBalance || 0);
     const currentPoints = Number(current.points || 0);
 
-    const transactions = current.transactions && typeof current.transactions === 'object'
-      ? current.transactions
-      : {};
+    const transactions =
+      current.transactions && typeof current.transactions === "object"
+        ? current.transactions
+        : {};
 
     const existing = transactions[txId];
-    if (!existing || typeof existing !== 'object') return;
+    if (!existing || typeof existing !== "object") return;
 
-    if ((existing.status || '').toString() !== 'pending') {
+    if ((existing.status || "").toString() !== "pending") {
       return current; // idempotent
     }
 
-    if (action === 'approve') {
+    if (action === "approve") {
       current.walletBalance = walletBalance + net;
       current.points = currentPoints + points;
 
-      existing.status = 'success';
+      existing.status = "success";
       existing.approvedAtMs = nowMs;
       existing.approvedBy = callerUid;
-      existing.verificationStatus = 'success';
+      existing.verificationStatus = "success";
 
       if (ledgerId && points > 0) {
-        const ledger = current.points_ledger && typeof current.points_ledger === 'object'
-          ? current.points_ledger
-          : {};
+        const ledger =
+          current.points_ledger && typeof current.points_ledger === "object"
+            ? current.points_ledger
+            : {};
         ledger[ledgerId] = {
           delta: points,
-          action: 'deposit_approved',
+          action: "deposit_approved",
           createdAtMs: nowMs,
           relatedTransactionId: txId,
-          metadata: { amount, fee, net }
+          metadata: { amount, fee, net },
         };
         current.points_ledger = ledger;
       }
 
       if (notificationId) {
-        const notifications = current.notifications && typeof current.notifications === 'object'
-          ? current.notifications
-          : {};
+        const notifications =
+          current.notifications && typeof current.notifications === "object"
+            ? current.notifications
+            : {};
         notifications[notificationId] = {
           id: notificationId,
           userId: targetUserId,
-          title: 'Deposit approved',
+          title: "Deposit approved",
           body: `Your deposit of ETB ${amount.toFixed(2)} has been approved.`,
-          type: 'success',
+          type: "success",
           isRead: false,
           createdAt: new Date().toISOString(),
           createdAtMs: nowMs,
-          metadata: { transactionId: txId }
+          metadata: { transactionId: txId },
         };
         current.notifications = notifications;
       }
-
     } else {
-      existing.status = 'failed';
+      existing.status = "failed";
       existing.rejectedAtMs = nowMs;
       existing.rejectedBy = callerUid;
-      existing.verificationStatus = 'failed';
+      existing.verificationStatus = "failed";
       if (reason) existing.rejectionReason = reason;
 
       if (notificationId) {
-        const notifications = current.notifications && typeof current.notifications === 'object'
-          ? current.notifications
-          : {};
+        const notifications =
+          current.notifications && typeof current.notifications === "object"
+            ? current.notifications
+            : {};
         notifications[notificationId] = {
           id: notificationId,
           userId: targetUserId,
-          title: 'Deposit rejected',
+          title: "Deposit rejected",
           body: `Your deposit of ETB ${amount.toFixed(2)} was rejected.`,
-          type: 'error',
+          type: "error",
           isRead: false,
           createdAt: new Date().toISOString(),
           createdAtMs: nowMs,
-          metadata: { transactionId: txId, ...(reason ? { reason } : {}) }
+          metadata: { transactionId: txId, ...(reason ? { reason } : {}) },
         };
         current.notifications = notifications;
       }
@@ -205,7 +236,10 @@ exports.adminReviewDeposit = functions.https.onCall(async (data, context) => {
   });
 
   if (!result.committed) {
-    throw new functions.https.HttpsError('aborted', 'Transaction could not be committed.');
+    throw new functions.https.HttpsError(
+      "aborted",
+      "Transaction could not be committed."
+    );
   }
 
   // Best-effort remove from queue after decision.
@@ -213,22 +247,35 @@ exports.adminReviewDeposit = functions.https.onCall(async (data, context) => {
     await queueRef.remove();
   } catch (_) {}
 
-  return { ok: true, status: action === 'approve' ? 'success' : 'failed' };
+  return { ok: true, status: action === "approve" ? "success" : "failed" };
 });
 
-exports.adminListPendingDeposits = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const limit = Math.max(1, Math.min(200, Number((data && data.limit) || 50)));
+exports.adminListPendingDeposits = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const limit = Math.max(
+      1,
+      Math.min(200, Number((data && data.limit) || 50))
+    );
 
-  const db = admin.database();
-  await assertAdminUid(db, callerUid);
+    const db = admin.database();
+    await assertAdminUid(db, callerUid);
 
-  const snap = await db.ref('review_queue/deposits').orderByChild('createdAtMs').limitToLast(limit).get();
-  const raw = snap.val() || {};
-  const items = Object.keys(raw).map((k) => raw[k]).filter(Boolean);
-  items.sort((a, b) => Number(b.createdAtMs || 0) - Number(a.createdAtMs || 0));
-  return { ok: true, items };
-});
+    const snap = await db
+      .ref("review_queue/deposits")
+      .orderByChild("createdAtMs")
+      .limitToLast(limit)
+      .get();
+    const raw = snap.val() || {};
+    const items = Object.keys(raw)
+      .map((k) => raw[k])
+      .filter(Boolean);
+    items.sort(
+      (a, b) => Number(b.createdAtMs || 0) - Number(a.createdAtMs || 0)
+    );
+    return { ok: true, items };
+  }
+);
 
 exports.adminListUsers = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
@@ -237,16 +284,16 @@ exports.adminListUsers = functions.https.onCall(async (data, context) => {
   const db = admin.database();
   await assertAdminUid(db, callerUid);
 
-  const snap = await db.ref('users').limitToFirst(limit).get();
+  const snap = await db.ref("users").limitToFirst(limit).get();
   const users = snap.val() || {};
   const items = Object.keys(users).map((uid) => {
     const u = users[uid] || {};
     return {
       id: uid,
-      name: u.name || '',
+      name: u.name || "",
       email: u.email || null,
       phone: u.phone || null,
-      role: u.role || 'user',
+      role: u.role || "user",
       walletBalance: Number(u.walletBalance || 0),
       points: Number(u.points || 0),
       isVerified: !!u.isVerified,
@@ -258,72 +305,97 @@ exports.adminListUsers = functions.https.onCall(async (data, context) => {
 
 exports.adminSetUserRole = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
-  const targetUserId = (data && data.targetUserId ? String(data.targetUserId) : '').trim();
-  const role = (data && data.role ? String(data.role) : '').trim();
+  const targetUserId = (
+    data && data.targetUserId ? String(data.targetUserId) : ""
+  ).trim();
+  const role = (data && data.role ? String(data.role) : "").trim();
 
   if (!targetUserId || !role) {
-    throw new functions.https.HttpsError('invalid-argument', 'targetUserId and role required.');
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "targetUserId and role required."
+    );
   }
 
-  const allowed = new Set(['user', 'equbAdmin', 'superAdmin']);
+  const allowed = new Set(["user", "equbAdmin", "superAdmin"]);
   if (!allowed.has(role)) {
-    throw new functions.https.HttpsError('invalid-argument', 'Invalid role.');
+    throw new functions.https.HttpsError("invalid-argument", "Invalid role.");
   }
 
   const db = admin.database();
   await assertAdminUid(db, callerUid);
 
   await db.ref(`users/${targetUserId}/role`).set(role);
-  await db.ref(`users/${targetUserId}/roleUpdatedAtMs`).set(admin.database.ServerValue.TIMESTAMP);
+  await db
+    .ref(`users/${targetUserId}/roleUpdatedAtMs`)
+    .set(admin.database.ServerValue.TIMESTAMP);
   await db.ref(`users/${targetUserId}/roleUpdatedBy`).set(callerUid);
 
   return { ok: true, targetUserId, role };
 });
 
-exports.adminSendUserNotification = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const targetUserId = (data && data.targetUserId ? String(data.targetUserId) : '').trim();
-  const title = (data && data.title ? String(data.title) : '').trim();
-  const body = (data && data.body ? String(data.body) : '').trim();
-  const type = (data && data.type ? String(data.type) : 'info').trim();
-  const metadata = (data && data.metadata && typeof data.metadata === 'object') ? data.metadata : {};
+exports.adminSendUserNotification = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const targetUserId = (
+      data && data.targetUserId ? String(data.targetUserId) : ""
+    ).trim();
+    const title = (data && data.title ? String(data.title) : "").trim();
+    const body = (data && data.body ? String(data.body) : "").trim();
+    const type = (data && data.type ? String(data.type) : "info").trim();
+    const metadata =
+      data && data.metadata && typeof data.metadata === "object"
+        ? data.metadata
+        : {};
 
-  if (!targetUserId || !title || !body) {
-    throw new functions.https.HttpsError('invalid-argument', 'targetUserId, title, body required.');
+    if (!targetUserId || !title || !body) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "targetUserId, title, body required."
+      );
+    }
+
+    const db = admin.database();
+    await assertAdminUid(db, callerUid);
+
+    const userRef = db.ref(`users/${targetUserId}`);
+    const notificationId = userRef.child("notifications").push().key;
+    if (!notificationId) {
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to create notification id."
+      );
+    }
+
+    await userRef.child(`notifications/${notificationId}`).set({
+      id: notificationId,
+      userId: targetUserId,
+      title,
+      body,
+      type,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+      createdAtMs: admin.database.ServerValue.TIMESTAMP,
+      metadata,
+      createdBy: callerUid,
+    });
+
+    return { ok: true, id: notificationId };
   }
-
-  const db = admin.database();
-  await assertAdminUid(db, callerUid);
-
-  const userRef = db.ref(`users/${targetUserId}`);
-  const notificationId = userRef.child('notifications').push().key;
-  if (!notificationId) {
-    throw new functions.https.HttpsError('internal', 'Failed to create notification id.');
-  }
-
-  await userRef.child(`notifications/${notificationId}`).set({
-    id: notificationId,
-    userId: targetUserId,
-    title,
-    body,
-    type,
-    isRead: false,
-    createdAt: new Date().toISOString(),
-    createdAtMs: admin.database.ServerValue.TIMESTAMP,
-    metadata,
-    createdBy: callerUid,
-  });
-
-  return { ok: true, id: notificationId };
-});
+);
 
 exports.adminGetUserAudit = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
-  const targetUserId = (data && data.targetUserId ? String(data.targetUserId) : '').trim();
+  const targetUserId = (
+    data && data.targetUserId ? String(data.targetUserId) : ""
+  ).trim();
   const limit = Math.max(1, Math.min(100, Number((data && data.limit) || 25)));
 
   if (!targetUserId) {
-    throw new functions.https.HttpsError('invalid-argument', 'targetUserId required.');
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "targetUserId required."
+    );
   }
 
   const db = admin.database();
@@ -331,28 +403,40 @@ exports.adminGetUserAudit = functions.https.onCall(async (data, context) => {
 
   const userSnap = await db.ref(`users/${targetUserId}`).get();
   if (!userSnap.exists()) {
-    throw new functions.https.HttpsError('not-found', 'User not found.');
+    throw new functions.https.HttpsError("not-found", "User not found.");
   }
   const u = userSnap.val() || {};
 
-  const txSnap = await db.ref(`users/${targetUserId}/transactions`).orderByChild('timestampMs').limitToLast(limit).get();
-  const ledgerSnap = await db.ref(`users/${targetUserId}/points_ledger`).orderByChild('createdAtMs').limitToLast(limit).get();
+  const txSnap = await db
+    .ref(`users/${targetUserId}/transactions`)
+    .orderByChild("timestampMs")
+    .limitToLast(limit)
+    .get();
+  const ledgerSnap = await db
+    .ref(`users/${targetUserId}/points_ledger`)
+    .orderByChild("createdAtMs")
+    .limitToLast(limit)
+    .get();
 
   const txRaw = txSnap.val() || {};
   const ledgerRaw = ledgerSnap.val() || {};
-  const transactions = Object.keys(txRaw).map((k) => txRaw[k]).filter(Boolean)
+  const transactions = Object.keys(txRaw)
+    .map((k) => txRaw[k])
+    .filter(Boolean)
     .sort((a, b) => Number(b.timestampMs || 0) - Number(a.timestampMs || 0));
-  const pointsLedger = Object.keys(ledgerRaw).map((k) => ledgerRaw[k]).filter(Boolean)
+  const pointsLedger = Object.keys(ledgerRaw)
+    .map((k) => ledgerRaw[k])
+    .filter(Boolean)
     .sort((a, b) => Number(b.createdAtMs || 0) - Number(a.createdAtMs || 0));
 
   return {
     ok: true,
     user: {
       id: targetUserId,
-      name: u.name || '',
+      name: u.name || "",
       email: u.email || null,
       phone: u.phone || null,
-      role: u.role || 'user',
+      role: u.role || "user",
       walletBalance: Number(u.walletBalance || 0),
       points: Number(u.points || 0),
       isVerified: !!u.isVerified,
@@ -369,10 +453,12 @@ exports.adminGetFeatureFlags = functions.https.onCall(async (data, context) => {
   const db = admin.database();
   await assertAdminUid(db, callerUid);
 
-  const snap = await db.ref('admin_config/feature_flags').get();
+  const snap = await db.ref("admin_config/feature_flags").get();
   const raw = snap.val();
   const value = isPlainObject(raw) ? raw : {};
-  const gatewayFlags = isPlainObject(value.gatewayFlags) ? value.gatewayFlags : {};
+  const gatewayFlags = isPlainObject(value.gatewayFlags)
+    ? value.gatewayFlags
+    : {};
 
   return {
     ok: true,
@@ -390,11 +476,16 @@ exports.adminSetFeatureFlags = functions.https.onCall(async (data, context) => {
 
   const flags = data && data.flags;
   if (!isPlainObject(flags)) {
-    throw new functions.https.HttpsError('invalid-argument', 'flags object required.');
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "flags object required."
+    );
   }
 
-  const gatewayFlags = isPlainObject(flags.gatewayFlags) ? flags.gatewayFlags : {};
-  await db.ref('admin_config/feature_flags').set({
+  const gatewayFlags = isPlainObject(flags.gatewayFlags)
+    ? flags.gatewayFlags
+    : {};
+  await db.ref("admin_config/feature_flags").set({
     gemini25ProEnabled: !!flags.gemini25ProEnabled,
     gatewayFlags,
     updatedAtMs: admin.database.ServerValue.TIMESTAMP,
@@ -404,94 +495,126 @@ exports.adminSetFeatureFlags = functions.https.onCall(async (data, context) => {
   return { ok: true };
 });
 
-exports.adminListGatewayOverrides = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const db = admin.database();
-  await assertAdminUid(db, callerUid);
+exports.adminListGatewayOverrides = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const db = admin.database();
+    await assertAdminUid(db, callerUid);
 
-  const snap = await db.ref('admin_config/gateway_overrides').get();
-  return { ok: true, items: snap.val() || {} };
-});
-
-exports.adminSetGatewayOverride = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const db = admin.database();
-  await assertAdminUid(db, callerUid);
-
-  const gatewayId = (data && data.gatewayId ? String(data.gatewayId) : '').trim();
-  const override = data && data.override;
-  if (!gatewayId || !isPlainObject(override)) {
-    throw new functions.https.HttpsError('invalid-argument', 'gatewayId and override required.');
+    const snap = await db.ref("admin_config/gateway_overrides").get();
+    return { ok: true, items: snap.val() || {} };
   }
+);
 
-  const meta = isPlainObject(override.meta) ? override.meta : {};
-  const environment = (override.environment ? String(override.environment) : '').trim() || 'mock';
+exports.adminSetGatewayOverride = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const db = admin.database();
+    await assertAdminUid(db, callerUid);
 
-  await db.ref(`admin_config/gateway_overrides/${gatewayId}`).set({
-    id: gatewayId,
-    enabled: !!override.enabled,
-    environment,
-    meta,
-    updatedAtMs: admin.database.ServerValue.TIMESTAMP,
-    updatedBy: callerUid,
-  });
+    const gatewayId = (
+      data && data.gatewayId ? String(data.gatewayId) : ""
+    ).trim();
+    const override = data && data.override;
+    if (!gatewayId || !isPlainObject(override)) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "gatewayId and override required."
+      );
+    }
 
-  return { ok: true };
-});
+    const meta = isPlainObject(override.meta) ? override.meta : {};
+    const environment =
+      (override.environment ? String(override.environment) : "").trim() ||
+      "mock";
 
-exports.adminSetGatewaySecret = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const db = admin.database();
-  await assertAdminUid(db, callerUid);
+    await db.ref(`admin_config/gateway_overrides/${gatewayId}`).set({
+      id: gatewayId,
+      enabled: !!override.enabled,
+      environment,
+      meta,
+      updatedAtMs: admin.database.ServerValue.TIMESTAMP,
+      updatedBy: callerUid,
+    });
 
-  const gatewayId = (data && data.gatewayId ? String(data.gatewayId) : '').trim();
-  const secrets = data && data.secrets;
-  if (!gatewayId || !isPlainObject(secrets)) {
-    throw new functions.https.HttpsError('invalid-argument', 'gatewayId and secrets object required.');
+    return { ok: true };
   }
+);
 
-  // Note: RTDB is not ideal for secrets. Prefer Secret Manager/KMS in production.
-  await db.ref(`admin_config/gateway_secrets/${gatewayId}`).set({
-    secrets,
-    updatedAtMs: admin.database.ServerValue.TIMESTAMP,
-    updatedBy: callerUid,
-  });
+exports.adminSetGatewaySecret = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const db = admin.database();
+    await assertAdminUid(db, callerUid);
 
-  return { ok: true };
-});
+    const gatewayId = (
+      data && data.gatewayId ? String(data.gatewayId) : ""
+    ).trim();
+    const secrets = data && data.secrets;
+    if (!gatewayId || !isPlainObject(secrets)) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "gatewayId and secrets object required."
+      );
+    }
 
-exports.adminGetGatewaySecretMetadata = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const db = admin.database();
-  await assertAdminUid(db, callerUid);
+    // Note: RTDB is not ideal for secrets. Prefer Secret Manager/KMS in production.
+    await db.ref(`admin_config/gateway_secrets/${gatewayId}`).set({
+      secrets,
+      updatedAtMs: admin.database.ServerValue.TIMESTAMP,
+      updatedBy: callerUid,
+    });
 
-  const gatewayId = (data && data.gatewayId ? String(data.gatewayId) : '').trim();
-  if (!gatewayId) {
-    throw new functions.https.HttpsError('invalid-argument', 'gatewayId required.');
+    return { ok: true };
   }
+);
 
-  const snap = await db.ref(`admin_config/gateway_secrets/${gatewayId}`).get();
-  if (!snap.exists()) return { ok: true, exists: false };
-  const raw = snap.val() || {};
-  const secrets = isPlainObject(raw.secrets) ? raw.secrets : {};
-  return {
-    ok: true,
-    exists: true,
-    keys: Object.keys(secrets),
-    updatedAtMs: raw.updatedAtMs || null,
-    updatedBy: raw.updatedBy || null,
-  };
-});
+exports.adminGetGatewaySecretMetadata = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const db = admin.database();
+    await assertAdminUid(db, callerUid);
+
+    const gatewayId = (
+      data && data.gatewayId ? String(data.gatewayId) : ""
+    ).trim();
+    if (!gatewayId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "gatewayId required."
+      );
+    }
+
+    const snap = await db
+      .ref(`admin_config/gateway_secrets/${gatewayId}`)
+      .get();
+    if (!snap.exists()) return { ok: true, exists: false };
+    const raw = snap.val() || {};
+    const secrets = isPlainObject(raw.secrets) ? raw.secrets : {};
+    return {
+      ok: true,
+      exists: true,
+      keys: Object.keys(secrets),
+      updatedAtMs: raw.updatedAtMs || null,
+      updatedBy: raw.updatedBy || null,
+    };
+  }
+);
 
 // --- Super Admin (highest privilege) ---
 
 exports.superAdminSetAdmin = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
-  const targetUid = (data && data.targetUid ? String(data.targetUid) : '').trim();
+  const targetUid = (
+    data && data.targetUid ? String(data.targetUid) : ""
+  ).trim();
   const isAdmin = !!(data && data.isAdmin);
 
   if (!targetUid) {
-    throw new functions.https.HttpsError('invalid-argument', 'targetUid required.');
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "targetUid required."
+    );
   }
 
   const db = admin.database();
@@ -506,39 +629,49 @@ exports.superAdminSetAdmin = functions.https.onCall(async (data, context) => {
   return { ok: true, targetUid, isAdmin };
 });
 
-exports.superAdminSetSuperAdmin = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const targetUid = (data && data.targetUid ? String(data.targetUid) : '').trim();
-  const isSuperAdmin = !!(data && data.isSuperAdmin);
+exports.superAdminSetSuperAdmin = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const targetUid = (
+      data && data.targetUid ? String(data.targetUid) : ""
+    ).trim();
+    const isSuperAdmin = !!(data && data.isSuperAdmin);
 
-  if (!targetUid) {
-    throw new functions.https.HttpsError('invalid-argument', 'targetUid required.');
+    if (!targetUid) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "targetUid required."
+      );
+    }
+
+    const db = admin.database();
+    await assertSuperAdminUid(db, callerUid);
+
+    if (isSuperAdmin) {
+      await db.ref(`superadmins/${targetUid}`).set(true);
+      // Ensure super admins are also admins.
+      await db.ref(`admins/${targetUid}`).set(true);
+    } else {
+      await db.ref(`superadmins/${targetUid}`).remove();
+    }
+
+    return { ok: true, targetUid, isSuperAdmin };
   }
-
-  const db = admin.database();
-  await assertSuperAdminUid(db, callerUid);
-
-  if (isSuperAdmin) {
-    await db.ref(`superadmins/${targetUid}`).set(true);
-    // Ensure super admins are also admins.
-    await db.ref(`admins/${targetUid}`).set(true);
-  } else {
-    await db.ref(`superadmins/${targetUid}`).remove();
-  }
-
-  return { ok: true, targetUid, isSuperAdmin };
-});
+);
 
 exports.superAdminListAdmins = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
-  const limit = Math.max(1, Math.min(1000, Number((data && data.limit) || 500)));
+  const limit = Math.max(
+    1,
+    Math.min(1000, Number((data && data.limit) || 500))
+  );
 
   const db = admin.database();
   await assertSuperAdminUid(db, callerUid);
 
   const [adminsSnap, superSnap] = await Promise.all([
-    db.ref('admins').limitToFirst(limit).get(),
-    db.ref('superadmins').limitToFirst(limit).get(),
+    db.ref("admins").limitToFirst(limit).get(),
+    db.ref("superadmins").limitToFirst(limit).get(),
   ]);
 
   const adminsRaw = adminsSnap.val() || {};
@@ -558,48 +691,62 @@ exports.superAdminListAdmins = functions.https.onCall(async (data, context) => {
   return { ok: true, items };
 });
 
-exports.superAdminSetFeatureFlags = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const db = admin.database();
-  await assertSuperAdminUid(db, callerUid);
+exports.superAdminSetFeatureFlags = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const db = admin.database();
+    await assertSuperAdminUid(db, callerUid);
 
-  const flags = data && data.flags;
-  if (!isPlainObject(flags)) {
-    throw new functions.https.HttpsError('invalid-argument', 'flags object required.');
+    const flags = data && data.flags;
+    if (!isPlainObject(flags)) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "flags object required."
+      );
+    }
+
+    const gatewayFlags = isPlainObject(flags.gatewayFlags)
+      ? flags.gatewayFlags
+      : {};
+    await db.ref("admin_config/feature_flags").set({
+      gemini25ProEnabled: !!flags.gemini25ProEnabled,
+      gatewayFlags,
+      updatedAtMs: admin.database.ServerValue.TIMESTAMP,
+      updatedBy: callerUid,
+      updatedByRole: "superAdmin",
+    });
+
+    return { ok: true };
   }
+);
 
-  const gatewayFlags = isPlainObject(flags.gatewayFlags) ? flags.gatewayFlags : {};
-  await db.ref('admin_config/feature_flags').set({
-    gemini25ProEnabled: !!flags.gemini25ProEnabled,
-    gatewayFlags,
-    updatedAtMs: admin.database.ServerValue.TIMESTAMP,
-    updatedBy: callerUid,
-    updatedByRole: 'superAdmin',
-  });
+exports.superAdminSetGatewaySecret = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const db = admin.database();
+    await assertSuperAdminUid(db, callerUid);
 
-  return { ok: true };
-});
+    const gatewayId = (
+      data && data.gatewayId ? String(data.gatewayId) : ""
+    ).trim();
+    const secrets = data && data.secrets;
+    if (!gatewayId || !isPlainObject(secrets)) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "gatewayId and secrets object required."
+      );
+    }
 
-exports.superAdminSetGatewaySecret = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const db = admin.database();
-  await assertSuperAdminUid(db, callerUid);
+    await db.ref(`admin_config/gateway_secrets/${gatewayId}`).set({
+      secrets,
+      updatedAtMs: admin.database.ServerValue.TIMESTAMP,
+      updatedBy: callerUid,
+      updatedByRole: "superAdmin",
+    });
 
-  const gatewayId = (data && data.gatewayId ? String(data.gatewayId) : '').trim();
-  const secrets = data && data.secrets;
-  if (!gatewayId || !isPlainObject(secrets)) {
-    throw new functions.https.HttpsError('invalid-argument', 'gatewayId and secrets object required.');
+    return { ok: true };
   }
-
-  await db.ref(`admin_config/gateway_secrets/${gatewayId}`).set({
-    secrets,
-    updatedAtMs: admin.database.ServerValue.TIMESTAMP,
-    updatedBy: callerUid,
-    updatedByRole: 'superAdmin',
-  });
-
-  return { ok: true };
-});
+);
 
 // --- FenanPay (web CORS-safe intent creation) ---
 
@@ -608,39 +755,69 @@ exports.fenanpayCreateIntent = functions.https.onCall(async (data, context) => {
   assertAuthed(context);
 
   const amount = Number(data && data.amount);
-  const currency = (data && data.currency ? String(data.currency) : 'ETB').trim() || 'ETB';
-  const paymentIntentUniqueId = (data && data.paymentIntentUniqueId ? String(data.paymentIntentUniqueId) : '').trim();
+  const currency =
+    (data && data.currency ? String(data.currency) : "ETB").trim() || "ETB";
+  const paymentIntentUniqueId = (
+    data && data.paymentIntentUniqueId ? String(data.paymentIntentUniqueId) : ""
+  ).trim();
 
   if (!Number.isFinite(amount) || amount <= 0) {
-    throw new functions.https.HttpsError('invalid-argument', 'amount must be > 0');
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "amount must be > 0"
+    );
   }
   if (!paymentIntentUniqueId) {
-    throw new functions.https.HttpsError('invalid-argument', 'paymentIntentUniqueId required');
-  }
-
-  const methods = Array.isArray(data && data.methods) ? data.methods.map(String) : [];
-  const returnUrl = (data && data.returnUrl ? String(data.returnUrl) : '').trim();
-  const expireIn = Math.max(60, Math.min(86400, Number((data && data.expireIn) || 3600)));
-  const commissionPaidByCustomer = !!(data && data.commissionPaidByCustomer);
-  const callbackUrl = (data && data.callbackUrl ? String(data.callbackUrl) : '').trim();
-
-  const db = admin.database();
-  const secretSnap = await db.ref('admin_config/gateway_secrets/fenanpay/secrets').get();
-  const secrets = secretSnap.exists() ? (secretSnap.val() || {}) : {};
-  const apiKey = (secrets.depositKey || secrets.apiKey || '').toString().trim();
-  if (!apiKey) {
     throw new functions.https.HttpsError(
-      'failed-precondition',
-      'FenanPay deposit key not configured. Set admin_config/gateway_secrets/fenanpay/secrets.depositKey (or apiKey).'
+      "invalid-argument",
+      "paymentIntentUniqueId required"
     );
   }
 
-  const endpoint = 'https://api.fenanpay.com/api/v1/payment/sandbox/intent';
+  const methods = Array.isArray(data && data.methods)
+    ? data.methods.map(String)
+    : [];
+  const returnUrl = (
+    data && data.returnUrl ? String(data.returnUrl) : ""
+  ).trim();
+  const expireIn = Math.max(
+    60,
+    Math.min(86400, Number((data && data.expireIn) || 3600))
+  );
+  const commissionPaidByCustomer = !!(data && data.commissionPaidByCustomer);
+  const callbackUrl = (
+    data && data.callbackUrl ? String(data.callbackUrl) : ""
+  ).trim();
+
+  const db = admin.database();
+  const secretSnap = await db
+    .ref("admin_config/gateway_secrets/fenanpay/secrets")
+    .get();
+  const secrets = secretSnap.exists() ? secretSnap.val() || {} : {};
+  const isEmulator =
+    String(process.env.FUNCTIONS_EMULATOR || "").toLowerCase() === "true";
+
+  let apiKey = (secrets.depositKey || secrets.apiKey || "").toString().trim();
+  if (!apiKey && isEmulator) {
+    // Dev-only escape hatch: allow passing the sandbox key from the client
+    // when running locally. Never enabled in production.
+    apiKey = ((data && (data.depositKey || data.apiKey)) || "")
+      .toString()
+      .trim();
+  }
+  if (!apiKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "FenanPay deposit key not configured. Set admin_config/gateway_secrets/fenanpay/secrets.depositKey (or apiKey)."
+    );
+  }
+
+  const endpoint = "https://api.fenanpay.com/api/v1/payment/sandbox/intent";
   const body = {
     amount,
     currency,
     paymentIntentUniqueId,
-    methods,
+    ...(methods.length ? { methods } : {}),
     returnUrl,
     expireIn,
     commissionPaidByCustomer,
@@ -649,47 +826,96 @@ exports.fenanpayCreateIntent = functions.https.onCall(async (data, context) => {
   };
 
   let resp;
+  const startedAtMs = Date.now();
+  const controller = new AbortController();
+  // Sandbox can be slow; use a longer timeout so we can capture real upstream errors.
+  const timeoutMs = 45000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
     resp = await fetch(endpoint, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         apiKey,
       },
       body: JSON.stringify(body),
+      signal: controller.signal,
     });
   } catch (e) {
-    throw new functions.https.HttpsError('internal', `FenanPay request failed: ${e}`);
+    const isAbort = e && typeof e === "object" && e.name === "AbortError";
+    if (isAbort) {
+      const elapsedMs = Date.now() - startedAtMs;
+      throw new functions.https.HttpsError(
+        "deadline-exceeded",
+        `FenanPay request timed out after ${timeoutMs}ms`,
+        { timeoutMs, elapsedMs, endpoint }
+      );
+    }
+
+    throw new functions.https.HttpsError(
+      "internal",
+      "FenanPay request failed",
+      { endpoint, cause: String(e) }
+    );
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   const text = await resp.text();
   if (!resp.ok) {
-    throw new functions.https.HttpsError('internal', `FenanPay intent failed: ${resp.status} ${text}`);
+    throw new functions.https.HttpsError("internal", "FenanPay intent failed", {
+      endpoint,
+      status: resp.status,
+      body: text,
+    });
   }
 
   let decoded;
   try {
     decoded = JSON.parse(text);
   } catch (_) {
-    throw new functions.https.HttpsError('internal', 'FenanPay response was not valid JSON');
+    throw new functions.https.HttpsError(
+      "internal",
+      "FenanPay response was not valid JSON",
+      { endpoint, body: text }
+    );
   }
 
   // Match the client extractor loosely.
-  let checkoutUrl = '';
-  if (decoded && typeof decoded === 'object') {
+  let checkoutUrl = "";
+  if (decoded && typeof decoded === "object") {
     const content = decoded.content;
-    if (typeof content === 'string') checkoutUrl = content.trim();
-    if (!checkoutUrl && content && typeof content === 'object') {
-      checkoutUrl =
-        (content.checkoutUrl || content.checkout_url || content.url || content.redirectUrl || content.redirect_url || '').toString().trim();
+    if (typeof content === "string") checkoutUrl = content.trim();
+    if (!checkoutUrl && content && typeof content === "object") {
+      checkoutUrl = (
+        content.checkoutUrl ||
+        content.checkout_url ||
+        content.url ||
+        content.redirectUrl ||
+        content.redirect_url ||
+        ""
+      )
+        .toString()
+        .trim();
     }
     if (!checkoutUrl) {
-      checkoutUrl = (decoded.checkoutUrl || decoded.url || decoded.redirectUrl || '').toString().trim();
+      checkoutUrl = (
+        decoded.checkoutUrl ||
+        decoded.url ||
+        decoded.redirectUrl ||
+        ""
+      )
+        .toString()
+        .trim();
     }
   }
 
   if (!checkoutUrl) {
-    throw new functions.https.HttpsError('internal', 'FenanPay response missing checkout URL');
+    throw new functions.https.HttpsError(
+      "internal",
+      "FenanPay response missing checkout URL",
+      { endpoint, decoded }
+    );
   }
 
   return { ok: true, checkoutUrl };
@@ -703,14 +929,14 @@ const {
   logAdminAction,
   performSystemMaintenance,
   generateComplianceReport,
-} = require('./advanced_admin');
+} = require("./advanced_admin");
 
 const {
   telebirrWebhook,
   cbeBirrWebhook,
   checkMobileMoneyTransaction,
   processPendingMobileMoneyTransactions,
-} = require('./mobile_money_webhooks');
+} = require("./mobile_money_webhooks");
 
 const {
   schedulePushNotification,
@@ -719,46 +945,47 @@ const {
   sendScheduledNotifications,
   scheduleContributionReminders,
   schedulePayoutNotifications,
-} = require('./push_notifications');
+} = require("./push_notifications");
 
 // --- Email Notifications ---
 
-const { EmailService } = require('./email_service');
+const { EmailService } = require("./email_service");
 const emailService = new EmailService();
 
 // Send welcome email when user is created
-exports.sendWelcomeEmail = functions.database.ref('users/{userId}')
+exports.sendWelcomeEmail = functions.database
+  .ref("users/{userId}")
   .onCreate(async (snapshot, context) => {
     const userId = context.params.userId;
     const userData = snapshot.val();
 
     if (!userData || !userData.email) {
-      console.log('No email found for user:', userId);
+      console.log("No email found for user:", userId);
       return;
     }
 
     try {
       await emailService.sendWelcomeEmail(
         userData.email,
-        userData.name || 'User'
+        userData.name || "User"
       );
-      console.log('Welcome email sent to:', userData.email);
+      console.log("Welcome email sent to:", userData.email);
     } catch (error) {
-      console.error('Failed to send welcome email:', error);
+      console.error("Failed to send welcome email:", error);
     }
   });
 
 // Send contribution reminder emails
 exports.scheduleContributionReminders = functions.pubsub
-  .schedule('every 24 hours')
+  .schedule("every 24 hours")
   .onRun(async (context) => {
     const db = admin.database();
     const now = new Date();
-    const reminderDate = new Date(now.getTime() + (24 * 60 * 60 * 1000)); // 24 hours from now
+    const reminderDate = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours from now
 
     try {
       // Get all groups with upcoming contribution dates
-      const groupsSnapshot = await db.ref('groups').get();
+      const groupsSnapshot = await db.ref("groups").get();
       if (!groupsSnapshot.exists()) return;
 
       const groups = groupsSnapshot.val();
@@ -770,27 +997,30 @@ exports.scheduleContributionReminders = functions.pubsub
         const timeDiff = nextPayout.getTime() - reminderDate.getTime();
 
         // If next payout is within 24 hours, send reminders
-        if (timeDiff > 0 && timeDiff <= (24 * 60 * 60 * 1000)) {
+        if (timeDiff > 0 && timeDiff <= 24 * 60 * 60 * 1000) {
           await sendGroupContributionReminders(db, groupId, groupData);
         }
       }
 
-      console.log('Contribution reminders processed');
+      console.log("Contribution reminders processed");
     } catch (error) {
-      console.error('Failed to process contribution reminders:', error);
+      console.error("Failed to process contribution reminders:", error);
     }
   });
 
 // Send payout notification emails
 exports.sendPayoutNotification = functions.database
-  .ref('auto_topup_executions/{executionId}')
+  .ref("auto_topup_executions/{executionId}")
   .onCreate(async (snapshot, context) => {
     const executionData = snapshot.val();
-    if (!executionData || executionData.status !== 'success') return;
+    if (!executionData || executionData.status !== "success") return;
 
     // This is for auto top-up success - you might want different logic for actual payouts
     // For now, this serves as an example of how to trigger email notifications
-    console.log('Auto top-up successful, could send notification:', executionData);
+    console.log(
+      "Auto top-up successful, could send notification:",
+      executionData
+    );
   });
 
 // Manual email sending function for admins
@@ -799,124 +1029,171 @@ exports.adminSendEmail = functions.https.onCall(async (data, context) => {
   const db = admin.database();
   await assertAdminUid(db, callerUid);
 
-  const to = (data && data.to ? String(data.to) : '').trim();
-  const subject = (data && data.subject ? String(data.subject) : '').trim();
-  const html = (data && data.html ? String(data.html) : '').trim();
-  const text = (data && data.text ? String(data.text) : '').trim();
+  const to = (data && data.to ? String(data.to) : "").trim();
+  const subject = (data && data.subject ? String(data.subject) : "").trim();
+  const html = (data && data.html ? String(data.html) : "").trim();
+  const text = (data && data.text ? String(data.text) : "").trim();
 
   if (!to || !subject || (!html && !text)) {
-    throw new functions.https.HttpsError('invalid-argument', 'to, subject, and html/text required.');
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "to, subject, and html/text required."
+    );
   }
 
   try {
     const result = await emailService.sendEmail(to, subject, html, text);
     return { ok: true, result };
   } catch (error) {
-    console.error('Failed to send email:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to send email');
+    console.error("Failed to send email:", error);
+    throw new functions.https.HttpsError("internal", "Failed to send email");
   }
 });
 
 // --- User Email Preferences Management ---
 
-exports.getUserEmailPreferences = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const targetUserId = (data && data.userId ? String(data.userId) : '').trim();
+exports.getUserEmailPreferences = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const targetUserId = (
+      data && data.userId ? String(data.userId) : ""
+    ).trim();
 
-  if (!targetUserId) {
-    throw new functions.https.HttpsError('invalid-argument', 'userId required.');
-  }
-
-  // Users can only get their own preferences, admins can get any user's
-  const db = admin.database();
-  const isAdmin = (await db.ref(`admins/${callerUid}`).get()).exists();
-  const isSuperAdmin = (await db.ref(`superadmins/${callerUid}`).get()).exists();
-
-  if (callerUid !== targetUserId && !isAdmin && !isSuperAdmin) {
-    throw new functions.https.HttpsError('permission-denied', 'Can only access your own email preferences.');
-  }
-
-  try {
-    const prefsSnapshot = await db.ref(`user_email_preferences/${targetUserId}`).get();
-    const preferences = prefsSnapshot.exists()
-      ? prefsSnapshot.val()
-      : {}; // Return empty object for defaults
-
-    return { success: true, preferences };
-  } catch (error) {
-    console.error('Failed to get email preferences:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to get email preferences');
-  }
-});
-
-exports.updateUserEmailPreferences = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const targetUserId = (data && data.userId ? String(data.userId) : '').trim();
-  const preferences = data && data.preferences;
-
-  if (!targetUserId || !isPlainObject(preferences)) {
-    throw new functions.https.HttpsError('invalid-argument', 'userId and preferences required.');
-  }
-
-  // Users can only update their own preferences, admins can update any user's
-  const db = admin.database();
-  const isAdmin = (await db.ref(`admins/${callerUid}`).get()).exists();
-  const isSuperAdmin = (await db.ref(`superadmins/${callerUid}`).get()).exists();
-
-  if (callerUid !== targetUserId && !isAdmin && !isSuperAdmin) {
-    throw new functions.https.HttpsError('permission-denied', 'Can only update your own email preferences.');
-  }
-
-  try {
-    // Validate preferences structure
-    const validKeys = [
-      'contributionReminders', 'payoutNotifications', 'groupInvitations',
-      'transactionConfirmations', 'weeklySummaries', 'marketingEmails',
-      'lowBalanceWarnings', 'systemUpdates'
-    ];
-
-    const sanitizedPrefs = {};
-    for (const key of validKeys) {
-      if (preferences[key] !== undefined) {
-        sanitizedPrefs[key] = preferences[key];
-      }
+    if (!targetUserId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "userId required."
+      );
     }
 
-    await db.ref(`user_email_preferences/${targetUserId}`).set({
-      ...sanitizedPrefs,
-      updatedAt: admin.database.ServerValue.TIMESTAMP,
-      updatedBy: callerUid,
-    });
+    // Users can only get their own preferences, admins can get any user's
+    const db = admin.database();
+    const isAdmin = (await db.ref(`admins/${callerUid}`).get()).exists();
+    const isSuperAdmin = (
+      await db.ref(`superadmins/${callerUid}`).get()
+    ).exists();
 
-    console.log('Email preferences updated for user:', targetUserId);
-    return { success: true };
-  } catch (error) {
-    console.error('Failed to update email preferences:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to update email preferences');
+    if (callerUid !== targetUserId && !isAdmin && !isSuperAdmin) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Can only access your own email preferences."
+      );
+    }
+
+    try {
+      const prefsSnapshot = await db
+        .ref(`user_email_preferences/${targetUserId}`)
+        .get();
+      const preferences = prefsSnapshot.exists() ? prefsSnapshot.val() : {}; // Return empty object for defaults
+
+      return { success: true, preferences };
+    } catch (error) {
+      console.error("Failed to get email preferences:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to get email preferences"
+      );
+    }
   }
-});
+);
+
+exports.updateUserEmailPreferences = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const targetUserId = (
+      data && data.userId ? String(data.userId) : ""
+    ).trim();
+    const preferences = data && data.preferences;
+
+    if (!targetUserId || !isPlainObject(preferences)) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "userId and preferences required."
+      );
+    }
+
+    // Users can only update their own preferences, admins can update any user's
+    const db = admin.database();
+    const isAdmin = (await db.ref(`admins/${callerUid}`).get()).exists();
+    const isSuperAdmin = (
+      await db.ref(`superadmins/${callerUid}`).get()
+    ).exists();
+
+    if (callerUid !== targetUserId && !isAdmin && !isSuperAdmin) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Can only update your own email preferences."
+      );
+    }
+
+    try {
+      // Validate preferences structure
+      const validKeys = [
+        "contributionReminders",
+        "payoutNotifications",
+        "groupInvitations",
+        "transactionConfirmations",
+        "weeklySummaries",
+        "marketingEmails",
+        "lowBalanceWarnings",
+        "systemUpdates",
+      ];
+
+      const sanitizedPrefs = {};
+      for (const key of validKeys) {
+        if (preferences[key] !== undefined) {
+          sanitizedPrefs[key] = preferences[key];
+        }
+      }
+
+      await db.ref(`user_email_preferences/${targetUserId}`).set({
+        ...sanitizedPrefs,
+        updatedAt: admin.database.ServerValue.TIMESTAMP,
+        updatedBy: callerUid,
+      });
+
+      console.log("Email preferences updated for user:", targetUserId);
+      return { success: true };
+    } catch (error) {
+      console.error("Failed to update email preferences:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to update email preferences"
+      );
+    }
+  }
+);
 
 exports.getUserEmailHistory = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
-  const targetUserId = (data && data.userId ? String(data.userId) : '').trim();
+  const targetUserId = (data && data.userId ? String(data.userId) : "").trim();
   const limit = Math.max(1, Math.min(100, Number((data && data.limit) || 50)));
 
   if (!targetUserId) {
-    throw new functions.https.HttpsError('invalid-argument', 'userId required.');
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "userId required."
+    );
   }
 
   // Users can only get their own history, admins can get any user's
   const db = admin.database();
   const isAdmin = (await db.ref(`admins/${callerUid}`).get()).exists();
-  const isSuperAdmin = (await db.ref(`superadmins/${callerUid}`).get()).exists();
+  const isSuperAdmin = (
+    await db.ref(`superadmins/${callerUid}`).get()
+  ).exists();
 
   if (callerUid !== targetUserId && !isAdmin && !isSuperAdmin) {
-    throw new functions.https.HttpsError('permission-denied', 'Can only access your own email history.');
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Can only access your own email history."
+    );
   }
 
   try {
-    const historySnapshot = await db.ref('email_notifications')
-      .orderByChild('userId')
+    const historySnapshot = await db
+      .ref("email_notifications")
+      .orderByChild("userId")
       .equalTo(targetUserId)
       .limitToLast(limit)
       .get();
@@ -932,8 +1209,11 @@ exports.getUserEmailHistory = functions.https.onCall(async (data, context) => {
 
     return { success: true, emails };
   } catch (error) {
-    console.error('Failed to get email history:', error);
-    throw new functions.https.HttpsError('internal', 'Failed to get email history');
+    console.error("Failed to get email history:", error);
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to get email history"
+    );
   }
 });
 
@@ -951,11 +1231,13 @@ async function sendGroupContributionReminders(db, groupId, groupData) {
       if (!userData.email) continue;
 
       // Check email preferences
-      const prefsSnapshot = await db.ref(`user_email_preferences/${memberId}`).get();
+      const prefsSnapshot = await db
+        .ref(`user_email_preferences/${memberId}`)
+        .get();
       const prefs = prefsSnapshot.exists() ? prefsSnapshot.val() : {};
-      const reminderPref = prefs.contributionReminders || 'immediate';
+      const reminderPref = prefs.contributionReminders || "immediate";
 
-      if (reminderPref === 'never') continue;
+      if (reminderPref === "never") continue;
 
       // Get user's contribution status (simplified)
       const contributionAmount = groupData.contributionAmount || 0;
@@ -963,15 +1245,19 @@ async function sendGroupContributionReminders(db, groupId, groupData) {
 
       await emailService.sendContributionReminder(
         userData.email,
-        userData.name || 'User',
-        groupData.name || 'Savings Group',
+        userData.name || "User",
+        groupData.name || "Savings Group",
         contributionAmount,
         new Date(nextPayoutDate).toLocaleDateString()
       );
 
-      console.log('Contribution reminder sent to:', userData.email);
+      console.log("Contribution reminder sent to:", userData.email);
     } catch (error) {
-      console.error('Failed to send contribution reminder to member:', memberId, error);
+      console.error(
+        "Failed to send contribution reminder to member:",
+        memberId,
+        error
+      );
     }
   }
 }
@@ -993,17 +1279,17 @@ exports.adminListGroups = functions.https.onCall(async (data, context) => {
   const db = admin.database();
   await assertAdminUid(db, callerUid);
 
-  const snap = await db.ref('groups').limitToFirst(limit).get();
+  const snap = await db.ref("groups").limitToFirst(limit).get();
   const raw = snap.val() || {};
   const items = Object.keys(raw).map((id) => {
     const g = raw[id] || {};
     const members = Array.isArray(g.members) ? g.members : [];
     return {
       id: g.id || id,
-      name: g.name || '',
+      name: g.name || "",
       contributionAmount: Number(g.contributionAmount || 0),
       frequencyDays: Number(g.frequencyDays || 0),
-      payoutStrategy: g.payoutStrategy || 'fixedOrder',
+      payoutStrategy: g.payoutStrategy || "fixedOrder",
       membersCount: members.length,
       bannerUrl: g.bannerUrl || null,
     };
@@ -1014,25 +1300,32 @@ exports.adminListGroups = functions.https.onCall(async (data, context) => {
 
 exports.adminGetGroup = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
-  const groupId = (data && data.groupId ? String(data.groupId) : '').trim();
+  const groupId = (data && data.groupId ? String(data.groupId) : "").trim();
   if (!groupId) {
-    throw new functions.https.HttpsError('invalid-argument', 'groupId required.');
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "groupId required."
+    );
   }
 
   const db = admin.database();
   await assertAdminUid(db, callerUid);
 
   const snap = await db.ref(`groups/${groupId}`).get();
-  if (!snap.exists()) throw new functions.https.HttpsError('not-found', 'Group not found.');
+  if (!snap.exists())
+    throw new functions.https.HttpsError("not-found", "Group not found.");
   return { ok: true, group: snap.val() };
 });
 
 exports.adminUpdateGroup = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
-  const groupId = (data && data.groupId ? String(data.groupId) : '').trim();
+  const groupId = (data && data.groupId ? String(data.groupId) : "").trim();
   const patch = data && data.patch;
   if (!groupId || !isPlainObject(patch)) {
-    throw new functions.https.HttpsError('invalid-argument', 'groupId and patch required.');
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "groupId and patch required."
+    );
   }
 
   const db = admin.database();
@@ -1040,16 +1333,19 @@ exports.adminUpdateGroup = functions.https.onCall(async (data, context) => {
 
   const ref = db.ref(`groups/${groupId}`);
   const result = await ref.transaction((current) => {
-    if (!current || typeof current !== 'object') return;
+    if (!current || typeof current !== "object") return;
 
     if (patch.name != null) current.name = String(patch.name);
-    if (patch.bannerUrl !== undefined) current.bannerUrl = patch.bannerUrl ? String(patch.bannerUrl) : null;
-    if (patch.contributionAmount != null) current.contributionAmount = Number(patch.contributionAmount);
+    if (patch.bannerUrl !== undefined)
+      current.bannerUrl = patch.bannerUrl ? String(patch.bannerUrl) : null;
+    if (patch.contributionAmount != null)
+      current.contributionAmount = Number(patch.contributionAmount);
 
     if (patch.frequencyDays != null) {
       const days = Number(patch.frequencyDays);
       current.frequencyDays = days;
-      if (!current.scheduleConfig || typeof current.scheduleConfig !== 'object') current.scheduleConfig = {};
+      if (!current.scheduleConfig || typeof current.scheduleConfig !== "object")
+        current.scheduleConfig = {};
       current.scheduleConfig.cycleLengthDays = days;
       current.scheduleConfig.cycle = inferCycle(days);
     }
@@ -1057,7 +1353,8 @@ exports.adminUpdateGroup = functions.https.onCall(async (data, context) => {
     if (patch.payoutStrategy != null) {
       const strategy = String(patch.payoutStrategy);
       current.payoutStrategy = strategy;
-      if (!current.scheduleConfig || typeof current.scheduleConfig !== 'object') current.scheduleConfig = {};
+      if (!current.scheduleConfig || typeof current.scheduleConfig !== "object")
+        current.scheduleConfig = {};
       current.scheduleConfig.strategy = strategy;
     }
 
@@ -1067,7 +1364,10 @@ exports.adminUpdateGroup = functions.https.onCall(async (data, context) => {
   });
 
   if (!result.committed) {
-    throw new functions.https.HttpsError('aborted', 'Group update could not be committed.');
+    throw new functions.https.HttpsError(
+      "aborted",
+      "Group update could not be committed."
+    );
   }
 
   return { ok: true };
@@ -1075,10 +1375,13 @@ exports.adminUpdateGroup = functions.https.onCall(async (data, context) => {
 
 exports.adminAddGroupMember = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
-  const groupId = (data && data.groupId ? String(data.groupId) : '').trim();
-  const memberId = (data && data.memberId ? String(data.memberId) : '').trim();
+  const groupId = (data && data.groupId ? String(data.groupId) : "").trim();
+  const memberId = (data && data.memberId ? String(data.memberId) : "").trim();
   if (!groupId || !memberId) {
-    throw new functions.https.HttpsError('invalid-argument', 'groupId and memberId required.');
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "groupId and memberId required."
+    );
   }
 
   const db = admin.database();
@@ -1086,16 +1389,20 @@ exports.adminAddGroupMember = functions.https.onCall(async (data, context) => {
 
   const ref = db.ref(`groups/${groupId}`);
   const result = await ref.transaction((current) => {
-    if (!current || typeof current !== 'object') return;
+    if (!current || typeof current !== "object") return;
 
-    const members = Array.isArray(current.members) ? current.members.slice() : [];
+    const members = Array.isArray(current.members)
+      ? current.members.slice()
+      : [];
     if (!members.includes(memberId)) members.push(memberId);
     current.members = members;
 
-    if (!current.scheduleConfig || typeof current.scheduleConfig !== 'object') current.scheduleConfig = {};
+    if (!current.scheduleConfig || typeof current.scheduleConfig !== "object")
+      current.scheduleConfig = {};
     current.scheduleConfig.preferredOrder = members;
 
-    if (!current.rotationState || typeof current.rotationState !== 'object') current.rotationState = {};
+    if (!current.rotationState || typeof current.rotationState !== "object")
+      current.rotationState = {};
     const payoutQueue = Array.isArray(current.rotationState.payoutQueue)
       ? current.rotationState.payoutQueue.slice()
       : [];
@@ -1114,71 +1421,96 @@ exports.adminAddGroupMember = functions.https.onCall(async (data, context) => {
   });
 
   if (!result.committed) {
-    throw new functions.https.HttpsError('aborted', 'Member add could not be committed.');
+    throw new functions.https.HttpsError(
+      "aborted",
+      "Member add could not be committed."
+    );
   }
   return { ok: true };
 });
 
-exports.adminRemoveGroupMember = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const groupId = (data && data.groupId ? String(data.groupId) : '').trim();
-  const memberId = (data && data.memberId ? String(data.memberId) : '').trim();
-  if (!groupId || !memberId) {
-    throw new functions.https.HttpsError('invalid-argument', 'groupId and memberId required.');
-  }
+exports.adminRemoveGroupMember = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const groupId = (data && data.groupId ? String(data.groupId) : "").trim();
+    const memberId = (
+      data && data.memberId ? String(data.memberId) : ""
+    ).trim();
+    if (!groupId || !memberId) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "groupId and memberId required."
+      );
+    }
 
-  const db = admin.database();
-  await assertAdminUid(db, callerUid);
+    const db = admin.database();
+    await assertAdminUid(db, callerUid);
 
-  const ref = db.ref(`groups/${groupId}`);
-  const result = await ref.transaction((current) => {
-    if (!current || typeof current !== 'object') return;
+    const ref = db.ref(`groups/${groupId}`);
+    const result = await ref.transaction((current) => {
+      if (!current || typeof current !== "object") return;
 
-    const members = Array.isArray(current.members) ? current.members.slice() : [];
-    current.members = members.filter((m) => String(m) !== memberId);
+      const members = Array.isArray(current.members)
+        ? current.members.slice()
+        : [];
+      current.members = members.filter((m) => String(m) !== memberId);
 
-    if (current.scheduleConfig && typeof current.scheduleConfig === 'object') {
-      if (Array.isArray(current.scheduleConfig.preferredOrder)) {
-        current.scheduleConfig.preferredOrder = current.scheduleConfig.preferredOrder
-          .filter((m) => String(m) !== memberId);
-      }
-      if (isPlainObject(current.scheduleConfig.adminAssignments)) {
-        const assignments = { ...current.scheduleConfig.adminAssignments };
-        for (const k of Object.keys(assignments)) {
-          if (String(assignments[k]) === memberId) delete assignments[k];
+      if (
+        current.scheduleConfig &&
+        typeof current.scheduleConfig === "object"
+      ) {
+        if (Array.isArray(current.scheduleConfig.preferredOrder)) {
+          current.scheduleConfig.preferredOrder =
+            current.scheduleConfig.preferredOrder.filter(
+              (m) => String(m) !== memberId
+            );
         }
-        current.scheduleConfig.adminAssignments = assignments;
+        if (isPlainObject(current.scheduleConfig.adminAssignments)) {
+          const assignments = { ...current.scheduleConfig.adminAssignments };
+          for (const k of Object.keys(assignments)) {
+            if (String(assignments[k]) === memberId) delete assignments[k];
+          }
+          current.scheduleConfig.adminAssignments = assignments;
+        }
       }
+
+      if (current.rotationState && typeof current.rotationState === "object") {
+        if (Array.isArray(current.rotationState.payoutQueue)) {
+          current.rotationState.payoutQueue =
+            current.rotationState.payoutQueue.filter(
+              (m) => String(m) !== memberId
+            );
+        }
+        if (isPlainObject(current.rotationState.contributionProgress)) {
+          const progress = { ...current.rotationState.contributionProgress };
+          delete progress[memberId];
+          current.rotationState.contributionProgress = progress;
+        }
+      }
+
+      current.updatedAtMs = admin.database.ServerValue.TIMESTAMP;
+      current.updatedBy = callerUid;
+      return current;
+    });
+
+    if (!result.committed) {
+      throw new functions.https.HttpsError(
+        "aborted",
+        "Member removal could not be committed."
+      );
     }
-
-    if (current.rotationState && typeof current.rotationState === 'object') {
-      if (Array.isArray(current.rotationState.payoutQueue)) {
-        current.rotationState.payoutQueue = current.rotationState.payoutQueue
-          .filter((m) => String(m) !== memberId);
-      }
-      if (isPlainObject(current.rotationState.contributionProgress)) {
-        const progress = { ...current.rotationState.contributionProgress };
-        delete progress[memberId];
-        current.rotationState.contributionProgress = progress;
-      }
-    }
-
-    current.updatedAtMs = admin.database.ServerValue.TIMESTAMP;
-    current.updatedBy = callerUid;
-    return current;
-  });
-
-  if (!result.committed) {
-    throw new functions.https.HttpsError('aborted', 'Member removal could not be committed.');
+    return { ok: true };
   }
-  return { ok: true };
-});
+);
 
 exports.adminDeleteGroup = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
-  const groupId = (data && data.groupId ? String(data.groupId) : '').trim();
+  const groupId = (data && data.groupId ? String(data.groupId) : "").trim();
   if (!groupId) {
-    throw new functions.https.HttpsError('invalid-argument', 'groupId required.');
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "groupId required."
+    );
   }
 
   const db = admin.database();
@@ -1193,7 +1525,8 @@ exports.adminDeleteGroup = functions.https.onCall(async (data, context) => {
 exports.telebirrWebhook = telebirrWebhook;
 exports.cbeBirrWebhook = cbeBirrWebhook;
 exports.checkMobileMoneyTransaction = checkMobileMoneyTransaction;
-exports.processPendingMobileMoneyTransactions = processPendingMobileMoneyTransactions;
+exports.processPendingMobileMoneyTransactions =
+  processPendingMobileMoneyTransactions;
 
 // --- Push Notifications ---
 

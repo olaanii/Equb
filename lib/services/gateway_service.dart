@@ -132,7 +132,8 @@ class GatewayService {
         'commissionPaidByCustomer': false,
         // If empty array is passed, all enabled methods are selected.
         'methods': <String>[],
-        'notes': 'Hosted checkout test integration (Payment Intent -> checkout URL).',
+        'notes':
+            'Hosted checkout test integration (Payment Intent -> checkout URL).',
       },
     ),
     PaymentGatewayConfig(
@@ -284,11 +285,15 @@ class GatewayService {
       final returnUrl = meta['returnUrl'] as String?;
       final callbackUrl = meta['callbackUrl'] as String?;
       final expireIn = meta['expireIn'] as int?;
-      final commissionPaidByCustomer = meta['commissionPaidByCustomer'] as bool?;
+      final commissionPaidByCustomer =
+          meta['commissionPaidByCustomer'] as bool?;
       final methodsRaw = meta['methods'];
       final methods =
           (methodsRaw is List)
-              ? methodsRaw.map((e) => e.toString()).where((e) => e.isNotEmpty).toList()
+              ? methodsRaw
+                  .map((e) => e.toString())
+                  .where((e) => e.isNotEmpty)
+                  .toList()
               : const <String>[];
 
       return FenanPayImpl(

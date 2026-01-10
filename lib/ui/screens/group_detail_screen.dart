@@ -81,118 +81,117 @@ class GroupDetailScreen extends ConsumerWidget {
                 text: 'Pay with FenanPay',
                 icon: Icons.payment,
                 onPressed: () async {
-              final messenger = ScaffoldMessenger.of(context);
-              try {
-                final gatewayService = ref.read(gatewayServiceProvider);
-                final paymentService = await gatewayService.getAdapter(
-                  'fenanpay',
-                );
-                if (paymentService == null) {
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('FenanPay gateway is not configured.'),
-                    ),
-                  );
-                  return;
-                }
-
-                if (!context.mounted) return;
-
-                final tx = await paymentService.createPayment(
-                  fromUserId: user?.id ?? 'demo_user',
-                  toUserId: group.id,
-                  amount: group.contribution.toDouble(),
-                  gateway: 'fenanpay',
-                  context: context,
-                );
-
-                if (!context.mounted) return;
-
-                switch (tx.status) {
-                  case TransactionStatus.success:
-                    messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text('Payment completed.'),
-                      ),
+                  final messenger = ScaffoldMessenger.of(context);
+                  try {
+                    final gatewayService = ref.read(gatewayServiceProvider);
+                    final paymentService = await gatewayService.getAdapter(
+                      'fenanpay',
                     );
-                    break;
-                  case TransactionStatus.failed:
-                    messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Payment failed. Please try again.',
+                    if (paymentService == null) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('FenanPay gateway is not configured.'),
                         ),
-                      ),
+                      );
+                      return;
+                    }
+
+                    if (!context.mounted) return;
+
+                    final tx = await paymentService.createPayment(
+                      fromUserId: user?.id ?? 'demo_user',
+                      toUserId: group.id,
+                      amount: group.contribution.toDouble(),
+                      gateway: 'fenanpay',
+                      context: context,
                     );
-                    break;
-                  case TransactionStatus.pending:
-                    messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Payment started. Awaiting confirmation.',
-                        ),
-                      ),
-                    );
-                    break;
-                }
-              } on GatewayCredentialException catch (err) {
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'FenanPay credentials missing: ${err.message}',
-                    ),
-                    action: SnackBarAction(
-                      label: 'View runbook',
-                      onPressed:
-                          () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const GatewaysScreen(),
+
+                    if (!context.mounted) return;
+
+                    switch (tx.status) {
+                      case TransactionStatus.success:
+                        messenger.showSnackBar(
+                          const SnackBar(content: Text('Payment completed.')),
+                        );
+                        break;
+                      case TransactionStatus.failed:
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text('Payment failed. Please try again.'),
+                          ),
+                        );
+                        break;
+                      case TransactionStatus.pending:
+                        messenger.showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Payment started. Awaiting confirmation.',
                             ),
                           ),
+                        );
+                        break;
+                    }
+                  } on GatewayCredentialException catch (err) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'FenanPay credentials missing: ${err.message}',
+                        ),
+                        action: SnackBarAction(
+                          label: 'View runbook',
+                          onPressed:
+                              () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const GatewaysScreen(),
+                                ),
+                              ),
+                        ),
+                      ),
+                    );
+                  } catch (err) {
+                    messenger.showSnackBar(
+                      SnackBar(content: Text('Payment error: $err')),
+                    );
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.surface,
+                ),
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: const Text('Group Chat'),
+                onPressed:
+                    () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => GroupChatScreen(groupId: group.id),
+                      ),
                     ),
-                  ),
-                );
-              } catch (err) {
-                messenger.showSnackBar(
-                  SnackBar(content: Text('Payment error: $err')),
-                );
-              }
-            },
-          ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 16),
-        Expanded(
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.surface),
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: const Text('Group Chat'),
+            icon: const Icon(Icons.analytics_outlined),
+            label: const Text('View Analytics'),
             onPressed:
                 () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => GroupChatScreen(groupId: group.id),
+                    builder: (_) => GroupAnalyticsScreen(groupId: group.id),
                   ),
                 ),
           ),
         ),
       ],
-    ),
-    const SizedBox(height: 16),
-    SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        style: ElevatedButton.styleFrom(backgroundColor: AppColors.surface),
-        icon: const Icon(Icons.analytics_outlined),
-        label: const Text('View Analytics'),
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => GroupAnalyticsScreen(groupId: group.id),
-          ),
-        ),
-      ),
-    ),
-  ],
-);
-}
+    );
+  }
 
   Widget _buildMemberList(BuildContext context) {
     return InfoCard(

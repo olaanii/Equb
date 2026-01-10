@@ -15,7 +15,8 @@ class IdScanScreen extends ConsumerStatefulWidget {
   ConsumerState<IdScanScreen> createState() => _IdScanScreenState();
 }
 
-class _IdScanScreenState extends ConsumerState<IdScanScreen> with WidgetsBindingObserver {
+class _IdScanScreenState extends ConsumerState<IdScanScreen>
+    with WidgetsBindingObserver {
   CameraController? _cameraController;
   bool _isProcessing = false;
   bool _isInitialized = false;
@@ -80,9 +81,9 @@ class _IdScanScreenState extends ConsumerState<IdScanScreen> with WidgetsBinding
       await _processCapturedImage(image.path);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Scan failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Scan failed: $e')));
       }
     } finally {
       if (mounted) {
@@ -103,9 +104,9 @@ class _IdScanScreenState extends ConsumerState<IdScanScreen> with WidgetsBinding
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
       }
     } finally {
       if (mounted) {
@@ -121,17 +122,18 @@ class _IdScanScreenState extends ConsumerState<IdScanScreen> with WidgetsBinding
 
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => DocumentProcessingScreen(
-            imagePath: imagePath,
-            documentType: _selectedDocumentType,
-          ),
+          builder:
+              (_) => DocumentProcessingScreen(
+                imagePath: imagePath,
+                documentType: _selectedDocumentType,
+              ),
         ),
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Processing failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Processing failed: $e')));
       }
     }
   }
@@ -180,12 +182,13 @@ class _IdScanScreenState extends ConsumerState<IdScanScreen> with WidgetsBinding
                       labelText: 'Document Type',
                       border: OutlineInputBorder(),
                     ),
-                    items: IdDocumentType.values.map((type) {
-                      return DropdownMenuItem(
-                        value: type,
-                        child: Text(_getDocumentTypeLabel(type)),
-                      );
-                    }).toList(),
+                    items:
+                        IdDocumentType.values.map((type) {
+                          return DropdownMenuItem(
+                            value: type,
+                            child: Text(_getDocumentTypeLabel(type)),
+                          );
+                        }).toList(),
                     onChanged: (value) {
                       if (value != null) {
                         setState(() => _selectedDocumentType = value);
@@ -230,9 +233,10 @@ class _IdScanScreenState extends ConsumerState<IdScanScreen> with WidgetsBinding
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(18),
                                 border: Border.all(
-                                  color: _isProcessing
-                                      ? scheme.error
-                                      : scheme.primary.withOpacity(0.75),
+                                  color:
+                                      _isProcessing
+                                          ? scheme.error
+                                          : scheme.primary.withOpacity(0.75),
                                   width: 2,
                                 ),
                               ),
@@ -344,22 +348,23 @@ class _IdScanScreenState extends ConsumerState<IdScanScreen> with WidgetsBinding
   void _showHelpDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Document Scanning Help'),
-        content: const Text(
-          '1. Select your document type from the dropdown\n\n'
-          '2. Position your document within the frame\n\n'
-          '3. Ensure the document is well-lit and all text is readable\n\n'
-          '4. Tap "Start scan" to capture the image\n\n'
-          '5. Review the extracted information before submitting',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Got it'),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Document Scanning Help'),
+            content: const Text(
+              '1. Select your document type from the dropdown\n\n'
+              '2. Position your document within the frame\n\n'
+              '3. Ensure the document is well-lit and all text is readable\n\n'
+              '4. Tap "Start scan" to capture the image\n\n'
+              '5. Review the extracted information before submitting',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Got it'),
+              ),
+            ],
           ),
-        ],
-      ),
     );
   }
 
@@ -369,43 +374,42 @@ class _IdScanScreenState extends ConsumerState<IdScanScreen> with WidgetsBinding
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Manual Document Entry'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: 'Full Name',
-              ),
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Manual Document Entry'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: 'Full Name'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: idController,
+                  decoration: const InputDecoration(labelText: 'ID Number'),
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: idController,
-              decoration: const InputDecoration(
-                labelText: 'ID Number',
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+              FilledButton(
+                onPressed: () {
+                  // TODO: Implement manual entry submission
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Manual entry submitted for review'),
+                    ),
+                  );
+                },
+                child: const Text('Submit'),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () {
-              // TODO: Implement manual entry submission
-              Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Manual entry submitted for review')),
-              );
-            },
-            child: const Text('Submit'),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -421,10 +425,12 @@ class DocumentProcessingScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<DocumentProcessingScreen> createState() => _DocumentProcessingScreenState();
+  ConsumerState<DocumentProcessingScreen> createState() =>
+      _DocumentProcessingScreenState();
 }
 
-class _DocumentProcessingScreenState extends ConsumerState<DocumentProcessingScreen> {
+class _DocumentProcessingScreenState
+    extends ConsumerState<DocumentProcessingScreen> {
   bool _isProcessing = true;
   DocumentScanResult? _scanResult;
   DocumentValidationResult? _validationResult;
@@ -456,9 +462,9 @@ class _DocumentProcessingScreenState extends ConsumerState<DocumentProcessingScr
     } catch (e) {
       if (mounted) {
         setState(() => _isProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Processing failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Processing failed: $e')));
       }
     }
   }
@@ -493,9 +499,9 @@ class _DocumentProcessingScreenState extends ConsumerState<DocumentProcessingScr
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Submission failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Submission failed: $e')));
       }
     } finally {
       if (mounted) {
@@ -511,205 +517,263 @@ class _DocumentProcessingScreenState extends ConsumerState<DocumentProcessingScr
     return Scaffold(
       appBar: AppBar(
         title: const Text('Processing Document'),
-        leading: _isProcessing ? null : IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-      ),
-      body: _isProcessing
-          ? const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Analyzing document...'),
-                ],
-              ),
-            )
-          : ListView(
-              padding: AppSpacing.pagePaddingMobile,
-              children: [
-                // Image preview
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Captured Image',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        AspectRatio(
-                          aspectRatio: 16 / 10,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              image: DecorationImage(
-                                image: FileImage(File(widget.imagePath)),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+        leading:
+            _isProcessing
+                ? null
+                : IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
                 ),
-
-                const SizedBox(height: 16),
-
-                // Extracted data
-                if (_scanResult != null)
+      ),
+      body:
+          _isProcessing
+              ? const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Analyzing document...'),
+                  ],
+                ),
+              )
+              : ListView(
+                padding: AppSpacing.pagePaddingMobile,
+                children: [
+                  // Image preview
                   Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                'Extracted Information',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const Spacer(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: (_scanResult!.confidence > 0.7)
-                                      ? scheme.primary.withOpacity(0.1)
-                                      : scheme.tertiary.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
+                          Text(
+                            'Captured Image',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 8),
+                          AspectRatio(
+                            aspectRatio: 16 / 10,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                image: DecorationImage(
+                                  image: FileImage(File(widget.imagePath)),
+                                  fit: BoxFit.cover,
                                 ),
-                                child: Text(
-                                  '${(_scanResult!.confidence * 100).round()}% confident',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: (_scanResult!.confidence > 0.7)
-                                        ? scheme.primary
-                                        : scheme.tertiary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Extracted data
+                  if (_scanResult != null)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  'Extracted Information',
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
+                                ),
+                                const Spacer(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        (_scanResult!.confidence > 0.7)
+                                            ? scheme.primary.withOpacity(0.1)
+                                            : scheme.tertiary.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${(_scanResult!.confidence * 100).round()}% confident',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color:
+                                          (_scanResult!.confidence > 0.7)
+                                              ? scheme.primary
+                                              : scheme.tertiary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            if (_scanResult!.detectedFields.isEmpty)
+                              const Text(
+                                'No information could be extracted. Please try again.',
+                              )
+                            else
+                              ..._scanResult!.detectedFields.entries.map((
+                                entry,
+                              ) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    children: [
+                                      Text(
+                                        _getFieldLabel(entry.key),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Text(entry.value.value),
+                                    ],
+                                  ),
+                                );
+                              }),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Validation results
+                  if (_validationResult != null)
+                    Card(
+                      color:
+                          _validationResult!.isValid
+                              ? scheme.primary.withOpacity(0.05)
+                              : scheme.error.withOpacity(0.05),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  _validationResult!.isValid
+                                      ? Icons.check_circle
+                                      : Icons.error,
+                                  color:
+                                      _validationResult!.isValid
+                                          ? scheme.primary
+                                          : scheme.error,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _validationResult!.isValid
+                                      ? 'Ready to submit'
+                                      : 'Issues found',
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
+                                ),
+                              ],
+                            ),
+
+                            if (_validationResult!.errors.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              ..._validationResult!.errors.map(
+                                (error) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        '• ',
+                                        style: TextStyle(color: Colors.red),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          error,
+                                          style: const TextStyle(
+                                            color: Colors.red,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 16),
 
-                          if (_scanResult!.detectedFields.isEmpty)
-                            const Text('No information could be extracted. Please try again.')
-                          else
-                            ..._scanResult!.detectedFields.entries.map((entry) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 8),
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      _getFieldLabel(entry.key),
-                                      style: const TextStyle(fontWeight: FontWeight.w500),
-                                    ),
-                                    const Spacer(),
-                                    Text(entry.value.value),
-                                  ],
+                            if (_validationResult!.warnings.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              ..._validationResult!.warnings.map(
+                                (warning) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        '• ',
+                                        style: TextStyle(color: Colors.orange),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          warning,
+                                          style: const TextStyle(
+                                            color: Colors.orange,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              );
-                            }),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                const SizedBox(height: 16),
-
-                // Validation results
-                if (_validationResult != null)
-                  Card(
-                    color: _validationResult!.isValid
-                        ? scheme.primary.withOpacity(0.05)
-                        : scheme.error.withOpacity(0.05),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                _validationResult!.isValid ? Icons.check_circle : Icons.error,
-                                color: _validationResult!.isValid ? scheme.primary : scheme.error,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                _validationResult!.isValid ? 'Ready to submit' : 'Issues found',
-                                style: Theme.of(context).textTheme.titleMedium,
                               ),
                             ],
-                          ),
-
-                          if (_validationResult!.errors.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            ..._validationResult!.errors.map((error) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('• ', style: TextStyle(color: Colors.red)),
-                                  Expanded(child: Text(error, style: const TextStyle(color: Colors.red))),
-                                ],
-                              ),
-                            )),
                           ],
-
-                          if (_validationResult!.warnings.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            ..._validationResult!.warnings.map((warning) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text('• ', style: TextStyle(color: Colors.orange)),
-                                  Expanded(child: Text(warning, style: const TextStyle(color: Colors.orange))),
-                                ],
-                              ),
-                            )),
-                          ],
-                        ],
+                        ),
                       ),
                     ),
+
+                  const SizedBox(height: 24),
+
+                  // Action buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed:
+                              _isSubmitting
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
+                          child: const Text('Retake'),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed:
+                              (_isSubmitting || !_validationResult!.isValid)
+                                  ? null
+                                  : _submitDocument,
+                          child:
+                              _isSubmitting
+                                  ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                  : const Text('Submit for verification'),
+                        ),
+                      ),
+                    ],
                   ),
-
-                const SizedBox(height: 24),
-
-                // Action buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _isSubmitting ? null : () => Navigator.of(context).pop(),
-                        child: const Text('Retake'),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: (_isSubmitting || !_validationResult!.isValid)
-                            ? null
-                            : _submitDocument,
-                        child: _isSubmitting
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Submit for verification'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+                ],
+              ),
     );
   }
 

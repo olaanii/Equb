@@ -34,8 +34,12 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController(text: widget.initialData.displayName);
-    _phoneController = TextEditingController(text: widget.initialData.phoneNumber);
+    _nameController = TextEditingController(
+      text: widget.initialData.displayName,
+    );
+    _phoneController = TextEditingController(
+      text: widget.initialData.phoneNumber,
+    );
   }
 
   @override
@@ -75,9 +79,9 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
       widget.onNext();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save profile: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to save profile: $e')));
       }
     } finally {
       if (mounted) {
@@ -103,9 +107,9 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
       Navigator.of(context).pushNamedAndRemoveUntil('/', (r) => false);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Unable to skip setup: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Unable to skip setup: $e')));
       }
     } finally {
       if (mounted) {
@@ -134,11 +138,7 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
                   color: scheme.primary.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
-                  Icons.person,
-                  size: 60,
-                  color: scheme.primary,
-                ),
+                child: Icon(Icons.person, size: 60, color: scheme.primary),
               ),
             ),
 
@@ -146,9 +146,9 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
 
             Text(
               'Tell us about yourself',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
               textAlign: TextAlign.center,
             ),
 
@@ -185,7 +185,9 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
               textCapitalization: TextCapitalization.words,
               onChanged: (value) {
                 // Auto-save draft
-                final updatedData = widget.initialData.copyWith(displayName: value);
+                final updatedData = widget.initialData.copyWith(
+                  displayName: value,
+                );
                 widget.onDataChanged(updatedData);
               },
             ),
@@ -207,7 +209,9 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
                   return 'Please enter your phone number';
                 }
                 // Ethiopian phone number validation
-                final phoneRegex = RegExp(r'^\+251[0-9]{9}$|^251[0-9]{9}$|^0[0-9]{9}$');
+                final phoneRegex = RegExp(
+                  r'^\+251[0-9]{9}$|^251[0-9]{9}$|^0[0-9]{9}$',
+                );
                 if (!phoneRegex.hasMatch(value.replaceAll(' ', ''))) {
                   return 'Please enter a valid Ethiopian phone number';
                 }
@@ -215,7 +219,9 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
               },
               onChanged: (value) {
                 // Auto-save draft
-                final updatedData = widget.initialData.copyWith(phoneNumber: value);
+                final updatedData = widget.initialData.copyWith(
+                  phoneNumber: value,
+                );
                 widget.onDataChanged(updatedData);
               },
             ),
@@ -242,16 +248,20 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text(
-                        'Continue',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                      ),
+                child:
+                    _isSaving
+                        ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Text(
+                          'Continue',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
               ),
             ),
 
@@ -259,7 +269,8 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
 
             Center(
               child: TextButton(
-                onPressed: (_isSaving || _isSkipping) ? null : _skipAccountSetup,
+                onPressed:
+                    (_isSaving || _isSkipping) ? null : _skipAccountSetup,
                 child:
                     _isSkipping
                         ? const SizedBox(
@@ -283,11 +294,7 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
               ),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.shield,
-                    size: 20,
-                    color: scheme.primary,
-                  ),
+                  Icon(Icons.shield, size: 20, color: scheme.primary),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -304,4 +311,3 @@ class _ProfileSetupStepState extends ConsumerState<ProfileSetupStep> {
     );
   }
 }
-

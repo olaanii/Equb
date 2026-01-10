@@ -560,8 +560,8 @@ class EqubGroup {
   factory EqubGroup.fromJson(Map<String, dynamic> json) {
     final id = (json['id'] ?? '').toString();
     final name = (json['name'] ?? '').toString();
-    final contributionAmount = (json['contributionAmount'] as num?)?.toDouble() ??
-        0.0;
+    final contributionAmount =
+        (json['contributionAmount'] as num?)?.toDouble() ?? 0.0;
     final payoutStrategy = PayoutStrategy.values.firstWhere(
       (e) => e.toString().split('.').last == json['payoutStrategy'],
       orElse: () => PayoutStrategy.fixedOrder,
@@ -570,43 +570,44 @@ class EqubGroup {
     final membersRaw = json['members'];
     final members = switch (membersRaw) {
       List<dynamic>() => List<String>.unmodifiable(
-          membersRaw.map((e) => e.toString()).where((e) => e.isNotEmpty),
-        ),
+        membersRaw.map((e) => e.toString()).where((e) => e.isNotEmpty),
+      ),
       Map<dynamic, dynamic>() => List<String>.unmodifiable(
-          membersRaw.keys.map((k) => k.toString()).where((e) => e.isNotEmpty),
-        ),
+        membersRaw.keys.map((k) => k.toString()).where((e) => e.isNotEmpty),
+      ),
       _ => const <String>[],
     };
 
     final frequencyDays =
         (json['frequencyDays'] as int?) ??
         ((json['scheduleConfig'] is Map<String, dynamic>)
-            ? (json['scheduleConfig'] as Map<String, dynamic>)['cycleLengthDays']
+            ? (json['scheduleConfig']
+                    as Map<String, dynamic>)['cycleLengthDays']
                 as int?
             : null) ??
         30;
 
-    final schedule = (json['scheduleConfig'] is Map)
-        ? EqubScheduleConfig.fromJson(
-            Map<String, dynamic>.from(json['scheduleConfig'] as Map),
-          )
-        : EqubScheduleConfig(
-            cycleLengthDays: frequencyDays,
-            strategy: payoutStrategy,
-            preferredOrder: members,
-          );
+    final schedule =
+        (json['scheduleConfig'] is Map)
+            ? EqubScheduleConfig.fromJson(
+              Map<String, dynamic>.from(json['scheduleConfig'] as Map),
+            )
+            : EqubScheduleConfig(
+              cycleLengthDays: frequencyDays,
+              strategy: payoutStrategy,
+              preferredOrder: members,
+            );
 
-    final rotation = (json['rotationState'] is Map)
-        ? EqubRotationState.fromJson(
-            Map<String, dynamic>.from(json['rotationState'] as Map),
-          )
-        : EqubRotationState(
-            nextPayoutDate: schedule.startDate,
-            payoutQueue: members,
-            contributionProgress: {
-              for (final member in members) member: 0.0,
-            },
-          );
+    final rotation =
+        (json['rotationState'] is Map)
+            ? EqubRotationState.fromJson(
+              Map<String, dynamic>.from(json['rotationState'] as Map),
+            )
+            : EqubRotationState(
+              nextPayoutDate: schedule.startDate,
+              payoutQueue: members,
+              contributionProgress: {for (final member in members) member: 0.0},
+            );
 
     return EqubGroup._(
       id: id,

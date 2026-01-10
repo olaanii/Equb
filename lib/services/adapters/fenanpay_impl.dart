@@ -19,9 +19,10 @@ class FenanPayImpl implements PaymentService {
     this.commissionPaidByCustomer = false,
     this.methods = const <String>[],
     this.currency = 'ETB',
-  }) : returnUrl = (returnUrl?.trim().isNotEmpty == true)
-            ? returnUrl!.trim()
-            : _defaultReturnUrl;
+  }) : returnUrl =
+           (returnUrl?.trim().isNotEmpty == true)
+               ? returnUrl!.trim()
+               : _defaultReturnUrl;
 
   final String apiKey;
   final String? intentEndpoint;
@@ -53,33 +54,37 @@ class FenanPayImpl implements PaymentService {
       gateway: gateway,
     );
 
-    final endpoint = intentEndpoint?.trim().isNotEmpty == true
-        ? intentEndpoint!.trim()
-        : 'https://api.fenanpay.com/api/v1/payment/sandbox/intent';
+    final endpoint =
+        intentEndpoint?.trim().isNotEmpty == true
+            ? intentEndpoint!.trim()
+            : 'https://api.fenanpay.com/api/v1/payment/sandbox/intent';
 
     final body = <String, dynamic>{
       'amount': amount,
       'currency': currency,
       'paymentIntentUniqueId': paymentIntentUniqueId,
-      'methods': methods,
+      if (methods.isNotEmpty) 'methods': methods,
       'returnUrl': returnUrl,
       'expireIn': expireInSeconds,
       'commissionPaidByCustomer': commissionPaidByCustomer,
       // optional
       if (callbackUrl != null && callbackUrl!.trim().isNotEmpty)
         'callbackUrl': callbackUrl!.trim(),
-      'customerInfo': {
-        'name': fromUserId,
-      },
+      'customerInfo': {'name': fromUserId},
     };
 
     // Web browsers often block cross-origin POSTs to third-party APIs due to
     // CORS. Prefer a Firebase callable proxy (server-side) on web.
     String checkoutUrl = '';
     if (kIsWeb) {
+      const useEmulators = bool.fromEnvironment(
+        'USE_FIREBASE_EMULATORS',
+        defaultValue: false,
+      );
       try {
         final callable = FirebaseFunctions.instance.httpsCallable(
           'fenanpayCreateIntent',
+          options: HttpsCallableOptions(timeout: Duration(seconds: 90)),
         );
         final result = await callable.call(<String, dynamic>{
           'amount': amount,
@@ -89,6 +94,7 @@ class FenanPayImpl implements PaymentService {
           'returnUrl': returnUrl,
           'expireIn': expireInSeconds,
           'commissionPaidByCustomer': commissionPaidByCustomer,
+          if (useEmulators) 'apiKey': apiKey,
           if (callbackUrl != null && callbackUrl!.trim().isNotEmpty)
             'callbackUrl': callbackUrl!.trim(),
         });
@@ -98,7 +104,25 @@ class FenanPayImpl implements PaymentService {
           final map = Map<String, dynamic>.from(data);
           checkoutUrl = (map['checkoutUrl'] as String?)?.trim() ?? '';
         }
-      } catch (_) {
+      } catch (e) {
+        if (useEmulators) {
+          if (e is FirebaseFunctionsException) {
+            final msg =
+                (e.message?.trim().isNotEmpty == true) ? e.message!.trim() : '';
+            final details = e.details;
+            throw Exception(
+              'FenanPay intent via Functions emulator failed: '
+              'code=${e.code}'
+              '${msg.isNotEmpty ? ' message=$msg' : ''}'
+              '${details != null ? ' details=$details' : ''}'
+              ' raw=$e',
+            );
+          }
+          throw Exception(
+            'FenanPay intent via Functions emulator failed. Details: $e',
+          );
+        }
+
         // Fall back to direct call (may still fail with CORS, but keeps mobile
         // behavior and supports environments without the callable deployed).
         checkoutUrl = '';
@@ -111,10 +135,7 @@ class FenanPayImpl implements PaymentService {
         resp = await http
             .post(
               Uri.parse(endpoint),
-              headers: {
-                'Content-Type': 'application/json',
-                'apiKey': apiKey,
-              },
+              headers: {'Content-Type': 'application/json', 'apiKey': apiKey},
               body: jsonEncode(body),
             )
             .timeout(const Duration(seconds: 12));
@@ -156,10 +177,11 @@ class FenanPayImpl implements PaymentService {
     // rely on webhook/callback integration for final settlement.
     await Navigator.of(context).push<FenanPayCheckoutResult?>(
       MaterialPageRoute(
-        builder: (_) => FenanPayCheckoutScreen(
-          checkoutUrl: checkoutUrl,
-          returnUrl: returnUrl,
-        ),
+        builder:
+            (_) => FenanPayCheckoutScreen(
+              checkoutUrl: checkoutUrl,
+              returnUrl: returnUrl,
+            ),
       ),
     );
 

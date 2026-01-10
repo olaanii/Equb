@@ -17,7 +17,8 @@ class OnboardingFlowScreen extends ConsumerStatefulWidget {
   const OnboardingFlowScreen({super.key});
 
   @override
-  ConsumerState<OnboardingFlowScreen> createState() => _OnboardingFlowScreenState();
+  ConsumerState<OnboardingFlowScreen> createState() =>
+      _OnboardingFlowScreenState();
 }
 
 class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
@@ -80,7 +81,9 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
   }
 
   void _nextStep() {
-    final currentIndex = OnboardingStep.values.indexOf(_onboardingData.currentStep);
+    final currentIndex = OnboardingStep.values.indexOf(
+      _onboardingData.currentStep,
+    );
     if (currentIndex < OnboardingStep.values.length - 1) {
       final nextStep = OnboardingStep.values[currentIndex + 1];
       _updateData(_onboardingData.copyWith(currentStep: nextStep));
@@ -88,7 +91,9 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
   }
 
   void _previousStep() {
-    final currentIndex = OnboardingStep.values.indexOf(_onboardingData.currentStep);
+    final currentIndex = OnboardingStep.values.indexOf(
+      _onboardingData.currentStep,
+    );
     if (currentIndex > 0) {
       final previousStep = OnboardingStep.values[currentIndex - 1];
       _updateData(_onboardingData.copyWith(currentStep: previousStep));
@@ -121,9 +126,7 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     final progress = _calculateProgress();
@@ -136,9 +139,7 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
             _buildProgressIndicator(progress),
 
             // Step content
-            Expanded(
-              child: _buildCurrentStep(),
-            ),
+            Expanded(child: _buildCurrentStep()),
 
             // Navigation buttons
             _buildNavigationButtons(),
@@ -158,14 +159,18 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
               Text(
                 '${progress.completedSteps}/${progress.totalSteps}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.6),
                 ),
               ),
               const Spacer(),
               Text(
                 '${(progress.progressPercentage * 100).round()}%',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.6),
                 ),
               ),
             ],
@@ -284,7 +289,8 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
   Widget _buildNavigationButtons() {
     final currentStep = _onboardingData.currentStep;
 
-    if (currentStep == OnboardingStep.welcome || currentStep == OnboardingStep.completed) {
+    if (currentStep == OnboardingStep.welcome ||
+        currentStep == OnboardingStep.completed) {
       return const SizedBox.shrink();
     }
 
@@ -299,7 +305,8 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
                 child: const Text('Back'),
               ),
             ),
-          if (currentStep != OnboardingStep.welcome && currentStep != OnboardingStep.completed)
+          if (currentStep != OnboardingStep.welcome &&
+              currentStep != OnboardingStep.completed)
             const SizedBox(width: 16),
           Expanded(
             flex: 2,
@@ -340,4 +347,3 @@ class _OnboardingFlowScreenState extends ConsumerState<OnboardingFlowScreen> {
     );
   }
 }
-

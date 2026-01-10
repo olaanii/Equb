@@ -25,7 +25,8 @@ class PhoneVerificationStep extends ConsumerStatefulWidget {
   final VoidCallback onPrevious;
 
   @override
-  ConsumerState<PhoneVerificationStep> createState() => _PhoneVerificationStepState();
+  ConsumerState<PhoneVerificationStep> createState() =>
+      _PhoneVerificationStepState();
 }
 
 class _PhoneVerificationStepState extends ConsumerState<PhoneVerificationStep> {
@@ -170,7 +171,9 @@ class _PhoneVerificationStepState extends ConsumerState<PhoneVerificationStep> {
 
         final verificationId = _webVerificationId;
         final confirmation = _webConfirmationResult;
-        if (verificationId == null || verificationId.isEmpty || confirmation == null) {
+        if (verificationId == null ||
+            verificationId.isEmpty ||
+            confirmation == null) {
           throw StateError('Code not sent yet. Please resend the code.');
         }
 
@@ -207,9 +210,9 @@ class _PhoneVerificationStepState extends ConsumerState<PhoneVerificationStep> {
       widget.onNext();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Verification failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Verification failed: $e')));
       }
     } finally {
       if (mounted) {
@@ -245,11 +248,7 @@ class _PhoneVerificationStepState extends ConsumerState<PhoneVerificationStep> {
                 color: scheme.primary.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                Icons.phone_android,
-                size: 60,
-                color: scheme.primary,
-              ),
+              child: Icon(Icons.phone_android, size: 60, color: scheme.primary),
             ),
           ),
 
@@ -257,9 +256,9 @@ class _PhoneVerificationStepState extends ConsumerState<PhoneVerificationStep> {
 
           Text(
             'Verify your phone number',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
             textAlign: TextAlign.center,
           ),
 
@@ -302,25 +301,30 @@ class _PhoneVerificationStepState extends ConsumerState<PhoneVerificationStep> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: (_isVerifying || _codeController.text.length != 6)
-                  ? null
-                  : _verifyCode,
+              onPressed:
+                  (_isVerifying || _codeController.text.length != 6)
+                      ? null
+                      : _verifyCode,
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: _isVerifying
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text(
-                      'Verify Code',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
+              child:
+                  _isVerifying
+                      ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Text(
+                        'Verify Code',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
             ),
           ),
 
@@ -328,23 +332,27 @@ class _PhoneVerificationStepState extends ConsumerState<PhoneVerificationStep> {
 
           // Resend code
           Center(
-            child: _resendCountdown > 0
-                ? Text(
-                    'Resend code in ${_resendCountdown}s',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: scheme.onSurface.withOpacity(0.6),
+            child:
+                _resendCountdown > 0
+                    ? Text(
+                      'Resend code in ${_resendCountdown}s',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurface.withOpacity(0.6),
+                      ),
+                    )
+                    : TextButton(
+                      onPressed: _isSendingCode ? null : _sendVerificationCode,
+                      child:
+                          _isSendingCode
+                              ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Text('Resend Code'),
                     ),
-                  )
-                : TextButton(
-                    onPressed: _isSendingCode ? null : _sendVerificationCode,
-                    child: _isSendingCode
-                        ? const SizedBox(
-                            height: 16,
-                            width: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Resend Code'),
-                  ),
           ),
 
           const SizedBox(height: 32),
@@ -361,11 +369,7 @@ class _PhoneVerificationStepState extends ConsumerState<PhoneVerificationStep> {
               children: [
                 Row(
                   children: [
-                    Icon(
-                      Icons.help_outline,
-                      size: 20,
-                      color: scheme.primary,
-                    ),
+                    Icon(Icons.help_outline, size: 20, color: scheme.primary),
                     const SizedBox(width: 12),
                     Text(
                       'Didn\'t receive the code?',
@@ -404,4 +408,3 @@ class _PhoneVerificationStepState extends ConsumerState<PhoneVerificationStep> {
     );
   }
 }
-

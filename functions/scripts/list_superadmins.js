@@ -15,16 +15,16 @@ Notes:
 - Prints uid + email for each superadmin uid found.
 */
 
-const admin = require('firebase-admin');
+const admin = require("firebase-admin");
 
 function parseArgs(argv) {
   const args = {};
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
-    if (!a.startsWith('--')) continue;
+    if (!a.startsWith("--")) continue;
     const key = a.slice(2);
     const next = argv[i + 1];
-    if (next && !next.startsWith('--')) {
+    if (next && !next.startsWith("--")) {
       args[key] = next;
       i++;
     } else {
@@ -36,10 +36,10 @@ function parseArgs(argv) {
 
 async function main() {
   const args = parseArgs(process.argv);
-  const databaseURL = (args.databaseURL ? String(args.databaseURL) : '').trim();
-  const projectId = (args.projectId ? String(args.projectId) : '').trim();
+  const databaseURL = (args.databaseURL ? String(args.databaseURL) : "").trim();
+  const projectId = (args.projectId ? String(args.projectId) : "").trim();
 
-  if (!databaseURL) throw new Error('Missing required --databaseURL');
+  if (!databaseURL) throw new Error("Missing required --databaseURL");
 
   admin.initializeApp({
     credential: admin.credential.applicationDefault(),
@@ -47,12 +47,14 @@ async function main() {
     ...(projectId ? { projectId } : {}),
   });
 
-  const snap = await admin.database().ref('superadmins').once('value');
+  const snap = await admin.database().ref("superadmins").once("value");
   const map = snap.val() || {};
   const uids = Object.keys(map).filter((uid) => map[uid] === true);
 
   if (uids.length === 0) {
-    process.stdout.write('No superadmins found in RTDB at superadmins/{uid}=true\n');
+    process.stdout.write(
+      "No superadmins found in RTDB at superadmins/{uid}=true\n"
+    );
     return;
   }
 
@@ -61,10 +63,14 @@ async function main() {
   for (const uid of uids) {
     try {
       const user = await admin.auth().getUser(uid);
-      process.stdout.write(`- uid: ${uid}\n  email: ${user.email || '(no email)'}\n\n`);
+      process.stdout.write(
+        `- uid: ${uid}\n  email: ${user.email || "(no email)"}\n\n`
+      );
     } catch (e) {
-      const msg = (e && e.message) ? e.message : String(e);
-      process.stdout.write(`- uid: ${uid}\n  email: (lookup failed)\n  error: ${msg}\n\n`);
+      const msg = e && e.message ? e.message : String(e);
+      process.stdout.write(
+        `- uid: ${uid}\n  email: (lookup failed)\n  error: ${msg}\n\n`
+      );
     }
   }
 }

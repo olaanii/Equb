@@ -19,7 +19,8 @@ class SessionSecurityService {
 
   static const String _collection = 'user_sessions';
   static const Duration _sessionTimeout = Duration(hours: 24); // 24 hours
-  static const int _maxConcurrentSessions = 5; // Maximum concurrent sessions per user
+  static const int _maxConcurrentSessions =
+      5; // Maximum concurrent sessions per user
 
   Timer? _sessionTimer;
   DateTime? _lastActivity;
@@ -58,7 +59,8 @@ class SessionSecurityService {
   /// Create a new session record
   Future<SessionInfo> createSession(String userId, String deviceId) async {
     try {
-      final sessionId = '${userId}_${deviceId}_${DateTime.now().millisecondsSinceEpoch}';
+      final sessionId =
+          '${userId}_${deviceId}_${DateTime.now().millisecondsSinceEpoch}';
 
       final session = SessionInfo(
         id: sessionId,
@@ -96,7 +98,11 @@ class SessionSecurityService {
         LogLevel.error,
         'session_creation_failed',
         'Failed to create session',
-        context: {'userId': userId, 'deviceId': deviceId, 'error': e.toString()},
+        context: {
+          'userId': userId,
+          'deviceId': deviceId,
+          'error': e.toString(),
+        },
       );
       rethrow;
     }
@@ -158,20 +164,20 @@ class SessionSecurityService {
         LogLevel.warning,
         'all_sessions_ended',
         'All user sessions ended (force logout)',
-        context: {'userId': userId, 'endedBy': endedBy, 'sessionCount': sessions.length},
-      );
-
-      // Send security alert
-      await deviceService.sendSecurityAlert(
-        userId,
-        SecurityAlertType.suspiciousActivity,
-        {
-          'action': 'force_logout_all_devices',
+        context: {
+          'userId': userId,
           'endedBy': endedBy,
           'sessionCount': sessions.length,
         },
       );
 
+      // Send security alert
+      await deviceService
+          .sendSecurityAlert(userId, SecurityAlertType.suspiciousActivity, {
+            'action': 'force_logout_all_devices',
+            'endedBy': endedBy,
+            'sessionCount': sessions.length,
+          });
     } catch (e) {
       logService.log(
         LogLevel.error,
@@ -185,11 +191,12 @@ class SessionSecurityService {
   /// Get active sessions for a user
   Future<List<SessionInfo>> getActiveUserSessions(String userId) async {
     try {
-      final snapshot = await firestore
-          .collection(_collection)
-          .where('userId', isEqualTo: userId)
-          .where('isActive', isEqualTo: true)
-          .get();
+      final snapshot =
+          await firestore
+              .collection(_collection)
+              .where('userId', isEqualTo: userId)
+              .where('isActive', isEqualTo: true)
+              .get();
 
       return snapshot.docs
           .map((doc) => SessionInfo.fromJson(doc.data()))
@@ -216,7 +223,9 @@ class SessionSecurityService {
 
       if (!session.isActive) return true;
 
-      final timeSinceActivity = DateTime.now().difference(session.lastActivityAt);
+      final timeSinceActivity = DateTime.now().difference(
+        session.lastActivityAt,
+      );
       return timeSinceActivity > _sessionTimeout;
     } catch (e) {
       logService.log(
@@ -236,7 +245,8 @@ class SessionSecurityService {
       await endSession(sessionId, 'user_logout');
 
       // Update device last activity
-      final sessionDoc = await firestore.collection(_collection).doc(sessionId).get();
+      final sessionDoc =
+          await firestore.collection(_collection).doc(sessionId).get();
       if (sessionDoc.exists) {
         final session = SessionInfo.fromJson(sessionDoc.data()!);
         await deviceService.updateLastLogin(session.deviceId);
@@ -248,22 +258,31 @@ class SessionSecurityService {
         'User logged out securely',
         context: {'userId': userId, 'sessionId': sessionId},
       );
-
     } catch (e) {
       logService.log(
         LogLevel.error,
         'secure_logout_failed',
         'Secure logout failed',
-        context: {'userId': userId, 'sessionId': sessionId, 'error': e.toString()},
+        context: {
+          'userId': userId,
+          'sessionId': sessionId,
+          'error': e.toString(),
+        },
       );
     }
   }
 
   /// Check for suspicious session activity
-  Future<void> checkForSuspiciousActivity(String userId, String currentDeviceId, String ipAddress) async {
+  Future<void> checkForSuspiciousActivity(
+    String userId,
+    String currentDeviceId,
+    String ipAddress,
+  ) async {
     try {
       final activeSessions = await getActiveUserSessions(userId);
-      final currentDeviceSessions = activeSessions.where((s) => s.deviceId == currentDeviceId);
+      final currentDeviceSessions = activeSessions.where(
+        (s) => s.deviceId == currentDeviceId,
+      );
 
       // Check for unusual number of concurrent sessions
       if (activeSessions.length > _maxConcurrentSessions) {
@@ -279,19 +298,18 @@ class SessionSecurityService {
         );
 
         // Send security alert
-        await deviceService.sendSecurityAlert(
-          userId,
-          SecurityAlertType.suspiciousActivity,
-          {
-            'type': 'concurrent_sessions',
-            'sessionCount': activeSessions.length,
-            'maxAllowed': _maxConcurrentSessions,
-          },
-        );
+        await deviceService
+            .sendSecurityAlert(userId, SecurityAlertType.suspiciousActivity, {
+              'type': 'concurrent_sessions',
+              'sessionCount': activeSessions.length,
+              'maxAllowed': _maxConcurrentSessions,
+            });
       }
 
       // Check for sessions from different locations (simplified check)
-      final otherSessions = activeSessions.where((s) => s.deviceId != currentDeviceId);
+      final otherSessions = activeSessions.where(
+        (s) => s.deviceId != currentDeviceId,
+      );
       if (otherSessions.isNotEmpty && currentDeviceSessions.isEmpty) {
         // First login from this device while others are active
         logService.log(
@@ -306,17 +324,13 @@ class SessionSecurityService {
         );
 
         // Send security alert to all trusted devices
-        await deviceService.sendSecurityAlert(
-          userId,
-          SecurityAlertType.newDeviceLogin,
-          {
-            'deviceId': currentDeviceId,
-            'ipAddress': ipAddress,
-            'activeSessions': otherSessions.length,
-          },
-        );
+        await deviceService
+            .sendSecurityAlert(userId, SecurityAlertType.newDeviceLogin, {
+              'deviceId': currentDeviceId,
+              'ipAddress': ipAddress,
+              'activeSessions': otherSessions.length,
+            });
       }
-
     } catch (e) {
       logService.log(
         LogLevel.error,
@@ -332,11 +346,12 @@ class SessionSecurityService {
     try {
       final cutoffTime = DateTime.now().subtract(_sessionTimeout);
 
-      final expiredSessions = await firestore
-          .collection(_collection)
-          .where('isActive', isEqualTo: true)
-          .where('lastActivityAt', isLessThan: cutoffTime)
-          .get();
+      final expiredSessions =
+          await firestore
+              .collection(_collection)
+              .where('isActive', isEqualTo: true)
+              .where('lastActivityAt', isLessThan: cutoffTime)
+              .get();
 
       for (final doc in expiredSessions.docs) {
         await doc.reference.update({
@@ -355,7 +370,6 @@ class SessionSecurityService {
           context: {'count': expiredSessions.size},
         );
       }
-
     } catch (e) {
       logService.log(
         LogLevel.error,
@@ -382,7 +396,9 @@ class SessionSecurityService {
   Future<void> _checkSessionTimeout(String userId) async {
     try {
       final currentUser = _auth.currentUser;
-      if (currentUser?.uid != userId) return; // Session no longer active for this user
+      if (currentUser?.uid != userId) {
+        return; // Session no longer active for this user
+      }
 
       logService.log(
         LogLevel.warning,
@@ -396,7 +412,6 @@ class SessionSecurityService {
 
       // This would trigger UI to show login screen
       // In a real app, you'd have a global state management solution
-
     } catch (e) {
       logService.log(
         LogLevel.error,
@@ -414,8 +429,9 @@ class SessionSecurityService {
       if (activeSessions.length > _maxConcurrentSessions) {
         // End oldest sessions to stay within limit
         final sessionsToEnd = activeSessions.length - _maxConcurrentSessions;
-        final sortedSessions = activeSessions.toList()
-          ..sort((a, b) => a.lastActivityAt.compareTo(b.lastActivityAt));
+        final sortedSessions =
+            activeSessions.toList()
+              ..sort((a, b) => a.lastActivityAt.compareTo(b.lastActivityAt));
 
         for (var i = 0; i < sessionsToEnd && i < sortedSessions.length; i++) {
           await endSession(sortedSessions[i].id, 'session_limit_enforcement');
@@ -472,9 +488,10 @@ class SessionInfo {
   final String? userAgent;
   final DateTime? endedAt;
 
-  Duration get duration => endedAt != null
-      ? endedAt!.difference(startedAt)
-      : DateTime.now().difference(startedAt);
+  Duration get duration =>
+      endedAt != null
+          ? endedAt!.difference(startedAt)
+          : DateTime.now().difference(startedAt);
 
   bool get isExpired {
     if (!isActive) return true;
@@ -530,10 +547,10 @@ class SessionInfo {
       isActive: json['isActive'] as bool? ?? false,
       ipAddress: json['ipAddress'] as String?,
       userAgent: json['userAgent'] as String?,
-      endedAt: json['endedAt'] != null
-          ? DateTime.parse(json['endedAt'] as String)
-          : null,
+      endedAt:
+          json['endedAt'] != null
+              ? DateTime.parse(json['endedAt'] as String)
+              : null,
     );
   }
 }
-

@@ -285,54 +285,65 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                         return;
                                       }
                                       if (!codeSent) {
-                                        setSheetState(() => isSubmitting = true);
+                                        setSheetState(
+                                          () => isSubmitting = true,
+                                        );
                                         try {
                                           if (kIsWeb) {
                                             final verifier = RecaptchaVerifier(
-                                              auth: FirebaseAuthPlatform.instance,
+                                              auth:
+                                                  FirebaseAuthPlatform.instance,
                                               container: 'recaptcha-container',
                                             );
                                             confirmationResult =
                                                 await FirebaseAuth.instance
                                                     .signInWithPhoneNumber(
-                                              phone,
-                                              verifier,
-                                            );
+                                                      phone,
+                                                      verifier,
+                                                    );
                                           } else {
                                             await FirebaseAuth.instance
                                                 .verifyPhoneNumber(
-                                              phoneNumber: phone,
-                                              verificationCompleted:
-                                                  (credential) async {
-                                                await FirebaseAuth.instance
-                                                    .signInWithCredential(
-                                                  credential,
+                                                  phoneNumber: phone,
+                                                  verificationCompleted: (
+                                                    credential,
+                                                  ) async {
+                                                    await FirebaseAuth.instance
+                                                        .signInWithCredential(
+                                                          credential,
+                                                        );
+                                                    if (!context.mounted)
+                                                      return;
+                                                    if (Navigator.of(
+                                                      context,
+                                                    ).canPop()) {
+                                                      Navigator.of(
+                                                        context,
+                                                      ).pop();
+                                                    }
+                                                    Navigator.of(
+                                                      context,
+                                                    ).pushNamedAndRemoveUntil(
+                                                      '/',
+                                                      (r) => false,
+                                                    );
+                                                    ToastService.success(
+                                                      context,
+                                                      'Signed in successfully.',
+                                                    );
+                                                  },
+                                                  verificationFailed: (e) {
+                                                    throw e;
+                                                  },
+                                                  codeSent: (id, _) {
+                                                    verificationId = id;
+                                                  },
+                                                  codeAutoRetrievalTimeout: (
+                                                    id,
+                                                  ) {
+                                                    verificationId = id;
+                                                  },
                                                 );
-                                                if (!context.mounted) return;
-                                                if (Navigator.of(context)
-                                                    .canPop()) {
-                                                  Navigator.of(context).pop();
-                                                }
-                                                Navigator.of(context)
-                                                    .pushNamedAndRemoveUntil(
-                                                  '/',
-                                                  (r) => false,
-                                                );
-                                                ToastService.success(
-                                                  context,
-                                                  'Signed in successfully.',
-                                                );
-                                              },
-                                              verificationFailed: (e) {
-                                                throw e;
-                                              },
-                                              codeSent: (id, _) {
-                                                verificationId = id;
-                                              },
-                                              codeAutoRetrievalTimeout: (id) {
-                                                verificationId = id;
-                                              },
-                                            );
                                           }
 
                                           if (!context.mounted) return;
@@ -370,8 +381,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                             codeController.text.trim();
                                         if (kIsWeb) {
                                           final result =
-                                              await confirmationResult
-                                                  ?.confirm(smsCode);
+                                              await confirmationResult?.confirm(
+                                                smsCode,
+                                              );
                                           if (result?.user == null) {
                                             throw Exception(
                                               'Verification failed.',
@@ -386,21 +398,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                           }
                                           final credential =
                                               PhoneAuthProvider.credential(
-                                            verificationId: id,
-                                            smsCode: smsCode,
-                                          );
+                                                verificationId: id,
+                                                smsCode: smsCode,
+                                              );
                                           await FirebaseAuth.instance
-                                              .signInWithCredential(
-                                            credential,
-                                          );
+                                              .signInWithCredential(credential);
                                         }
 
                                         if (!context.mounted) return;
                                         if (Navigator.of(context).canPop()) {
                                           Navigator.of(context).pop();
                                         }
-                                        Navigator.of(context)
-                                            .pushNamedAndRemoveUntil(
+                                        Navigator.of(
+                                          context,
+                                        ).pushNamedAndRemoveUntil(
                                           '/',
                                           (r) => false,
                                         );

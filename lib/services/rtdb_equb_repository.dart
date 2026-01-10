@@ -83,7 +83,8 @@ class RtdbEqubRepository implements EqubRepository {
       final currentPoints = (data['points'] is int) ? data['points'] as int : 0;
       data['points'] = currentPoints + delta;
 
-      final ledger = (data['points_ledger'] as Map?)?.cast<String, dynamic>() ??
+      final ledger =
+          (data['points_ledger'] as Map?)?.cast<String, dynamic>() ??
           <String, dynamic>{};
       ledger[ledgerId] = <String, dynamic>{
         'delta': delta,
@@ -135,17 +136,22 @@ class RtdbEqubRepository implements EqubRepository {
       final ref = g.id.isEmpty ? _groupsRef.push() : _groupsRef.child(g.id);
       final id = ref.key;
       if (id == null || id.isEmpty) {
-        throw RepositoryException(code: 'id-generation-failed', message: 'Failed to generate group id');
+        throw RepositoryException(
+          code: 'id-generation-failed',
+          message: 'Failed to generate group id',
+        );
       }
       final creatorId = (actingUserId ?? '').trim();
-      final members = g.members.isNotEmpty
-          ? g.members
-          : (creatorId.isNotEmpty ? <String>[creatorId] : const <String>[]);
+      final members =
+          g.members.isNotEmpty
+              ? g.members
+              : (creatorId.isNotEmpty ? <String>[creatorId] : const <String>[]);
 
       final schedule = g.scheduleConfig.copyWith(
-        preferredOrder: g.scheduleConfig.preferredOrder.isNotEmpty
-            ? g.scheduleConfig.preferredOrder
-            : members,
+        preferredOrder:
+            g.scheduleConfig.preferredOrder.isNotEmpty
+                ? g.scheduleConfig.preferredOrder
+                : members,
       );
 
       final rotation = _rotationEngine.bootstrapState(
@@ -186,7 +192,10 @@ class RtdbEqubRepository implements EqubRepository {
       final raw = snapshot.value;
       if (raw == null) return null;
       if (raw is! Map) {
-        throw RepositoryException(code: 'invalid-data', message: 'Expected group to be a Map');
+        throw RepositoryException(
+          code: 'invalid-data',
+          message: 'Expected group to be a Map',
+        );
       }
       final data = Map<String, dynamic>.from(raw);
       data['id'] = data['id'] ?? groupId;
@@ -205,9 +214,13 @@ class RtdbEqubRepository implements EqubRepository {
       // Avoid over-optimizing equality checks; just persist the synced state.
       if (updatedState.nextPayoutDate != group.rotationState.nextPayoutDate ||
           updatedState.currentRound != group.rotationState.currentRound ||
-          updatedState.payoutQueue.length != group.rotationState.payoutQueue.length ||
+          updatedState.payoutQueue.length !=
+              group.rotationState.payoutQueue.length ||
           updatedState.history.length != group.rotationState.history.length) {
-        await _groupsRef.child(groupId).child('rotationState').set(updatedState.toJson());
+        await _groupsRef
+            .child(groupId)
+            .child('rotationState')
+            .set(updatedState.toJson());
         return group.copyWith(rotationState: updatedState);
       }
 
@@ -220,7 +233,10 @@ class RtdbEqubRepository implements EqubRepository {
     return _guard('fetchGroupMetrics', () async {
       final group = await findGroup(groupId);
       if (group == null) {
-        throw RepositoryException(code: 'group-not-found', message: 'Group $groupId not found');
+        throw RepositoryException(
+          code: 'group-not-found',
+          message: 'Group $groupId not found',
+        );
       }
 
       final state = group.rotationState;
@@ -250,7 +266,8 @@ class RtdbEqubRepository implements EqubRepository {
         cycleLengthDays: config.cycleLengthDays,
         nextPayoutDate: state.nextPayoutDate,
         memberProgress: state.contributionProgress,
-        nextRecipient: state.payoutQueue.isNotEmpty ? state.payoutQueue.first : null,
+        nextRecipient:
+            state.payoutQueue.isNotEmpty ? state.payoutQueue.first : null,
         nextRound: state.currentRound + 1,
       );
     }, context: {'groupId': groupId});
@@ -261,11 +278,16 @@ class RtdbEqubRepository implements EqubRepository {
     return _guard('fetchRoundSummaries', () async {
       final group = await findGroup(groupId);
       if (group == null) {
-        throw RepositoryException(code: 'group-not-found', message: 'Group $groupId not found');
+        throw RepositoryException(
+          code: 'group-not-found',
+          message: 'Group $groupId not found',
+        );
       }
 
       final summaries = <EqubRoundSummary>[];
-      final historyMap = {for (var h in group.rotationState.history) h.round: h};
+      final historyMap = {
+        for (var h in group.rotationState.history) h.round: h,
+      };
 
       for (var i = 1; i <= group.rotationState.currentRound; i++) {
         final record = historyMap[i];
@@ -311,7 +333,10 @@ class RtdbEqubRepository implements EqubRepository {
     return _guard('triggerNextPayout', () async {
       final group = await findGroup(groupId);
       if (group == null) {
-        throw RepositoryException(code: 'group-not-found', message: 'Group $groupId not found');
+        throw RepositoryException(
+          code: 'group-not-found',
+          message: 'Group $groupId not found',
+        );
       }
 
       final outcome = _rotationEngine.forcePayout(
@@ -330,7 +355,8 @@ class RtdbEqubRepository implements EqubRepository {
 
       final payout = outcome.payout!;
       final payoutTx = TransactionModel(
-        id: 'manual-$groupId-${payout.round}-${payout.processedAt.microsecondsSinceEpoch}',
+        id:
+            'manual-$groupId-${payout.round}-${payout.processedAt.microsecondsSinceEpoch}',
         fromUserId: groupId,
         toUserId: payout.memberId,
         amount: payout.amount,
@@ -358,7 +384,10 @@ class RtdbEqubRepository implements EqubRepository {
     return _guard('contribute', () async {
       final group = await findGroup(groupId);
       if (group == null) {
-        throw RepositoryException(code: 'group-not-found', message: 'Group $groupId not found');
+        throw RepositoryException(
+          code: 'group-not-found',
+          message: 'Group $groupId not found',
+        );
       }
 
       final tx = TransactionModel(
@@ -387,7 +416,8 @@ class RtdbEqubRepository implements EqubRepository {
       if (rotationOutcome.payoutTriggered && rotationOutcome.payout != null) {
         final payout = rotationOutcome.payout!;
         final payoutTx = TransactionModel(
-          id: 'payout-$groupId-${payout.round}-${payout.processedAt.microsecondsSinceEpoch}',
+          id:
+              'payout-$groupId-${payout.round}-${payout.processedAt.microsecondsSinceEpoch}',
           fromUserId: groupId,
           toUserId: payout.memberId,
           amount: payout.amount,
@@ -405,14 +435,20 @@ class RtdbEqubRepository implements EqubRepository {
 
       // Points + notifications (best-effort; non-fatal).
       try {
-        final earned = MoneyMathematics.calculatePoints(tx.amount, 'contribute');
+        final earned = MoneyMathematics.calculatePoints(
+          tx.amount,
+          'contribute',
+        );
         await _awardPoints(
           userId: userId,
           delta: earned,
           action: 'contribute',
           relatedGroupId: groupId,
           relatedTransactionId: tx.id,
-          metadata: <String, dynamic>{'amount': tx.amount, 'groupName': group.name},
+          metadata: <String, dynamic>{
+            'amount': tx.amount,
+            'groupName': group.name,
+          },
         );
 
         await _pushNotification(

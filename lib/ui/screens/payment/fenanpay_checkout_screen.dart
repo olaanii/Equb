@@ -61,12 +61,16 @@ class _FenanPayCheckoutScreenState extends State<FenanPayCheckoutScreen> {
               },
               onNavigationRequest: (request) {
                 final uri = Uri.tryParse(request.url);
-                if (uri != null && returnUri != null && _matchesReturnUrl(uri, returnUri)) {
+                if (uri != null &&
+                    returnUri != null &&
+                    _matchesReturnUrl(uri, returnUri)) {
                   _complete(
                     FenanPayCheckoutResult(
                       status: FenanPayCheckoutStatus.completed,
                       rawUrl: uri.toString(),
-                      queryParameters: Map<String, String>.from(uri.queryParameters),
+                      queryParameters: Map<String, String>.from(
+                        uri.queryParameters,
+                      ),
                     ),
                   );
                   return NavigationDecision.prevent;
@@ -117,12 +121,16 @@ class _FenanPayCheckoutScreenState extends State<FenanPayCheckoutScreen> {
                   WebViewWidget(controller: _controller),
                   if (_isLoading)
                     Container(
-                      color: AppColors.background.withAlpha((0.85 * 255).round()),
+                      color: AppColors.background.withAlpha(
+                        (0.85 * 255).round(),
+                      ),
                       child: const Center(child: CircularProgressIndicator()),
                     ),
                   if (_errorMessage != null)
                     Container(
-                      color: AppColors.background.withAlpha((0.9 * 255).round()),
+                      color: AppColors.background.withAlpha(
+                        (0.9 * 255).round(),
+                      ),
                       alignment: Alignment.center,
                       padding: const EdgeInsets.all(24),
                       child: ConstrainedBox(
@@ -198,12 +206,13 @@ class _FenanPayCheckoutScreenState extends State<FenanPayCheckoutScreen> {
 
   void _setError(String message) {
     setState(() {
-      _errorMessage = message.isEmpty ? 'Something went wrong. Please try again.' : message;
+      _errorMessage =
+          message.isEmpty ? 'Something went wrong. Please try again.' : message;
     });
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_errorMessage!)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_errorMessage!)));
     }
   }
 
