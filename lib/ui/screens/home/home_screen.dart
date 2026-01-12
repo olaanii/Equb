@@ -148,20 +148,19 @@ class HomeScreen extends ConsumerWidget {
                 );
               }
 
-                final chapa =
-                  txs
-                      .where(
-                        (t) =>
-                      t.gateway.toLowerCase() == 'chapa' &&
-                            (t.status == TransactionStatus.success ||
-                                t.verificationStatus ==
-                                    TransactionStatus.success),
-                      )
-                      .toList(growable: false)
-                    ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+              final chapa = txs
+                  .where(
+                    (t) =>
+                        t.gateway.toLowerCase() == 'chapa' &&
+                        (t.status == TransactionStatus.success ||
+                            t.verificationStatus == TransactionStatus.success),
+                  )
+                  .toList(growable: false)
+                ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-              final recent =
-                  chapa.take(3).map((t) {
+              final recent = chapa
+                  .take(3)
+                  .map((t) {
                     final isDeposit =
                         t.fromUserId == uid && t.toUserId == 'wallet';
                     final isWithdraw =
@@ -177,7 +176,8 @@ class HomeScreen extends ConsumerWidget {
                       amount: '$sign ${t.amount.toStringAsFixed(2)}',
                       isPositive: isDeposit,
                     );
-                  }).toList(growable: false);
+                  })
+                  .toList(growable: false);
 
               if (recent.isEmpty) {
                 return Text(
@@ -189,9 +189,7 @@ class HomeScreen extends ConsumerWidget {
               }
 
               return Column(
-                children: [
-                  for (final t in recent) _TransactionTile(item: t),
-                ],
+                children: [for (final t in recent) _TransactionTile(item: t)],
               );
             },
           ),
@@ -272,10 +270,7 @@ class _BalanceCard extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: _InfoPair(
-                    label: 'NeoPay number',
-                    value: accountLabel,
-                  ),
+                  child: _InfoPair(label: 'NeoPay number', value: accountLabel),
                 ),
                 const SizedBox(width: 12),
                 _InfoPair(label: 'Neo points', value: '$points points'),

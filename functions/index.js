@@ -83,7 +83,9 @@ async function assertSuperAdminUid(db, callerUid) {
 }
 
 function normalizeEmail(email) {
-  return String(email || "").trim().toLowerCase();
+  return String(email || "")
+    .trim()
+    .toLowerCase();
 }
 
 function emailKey(email) {
@@ -147,33 +149,35 @@ exports.bootstrapAdmin = functions.https.onCall(async (data, context) => {
 
 // --- User email sync/index (server-managed) ---
 
-exports.onAuthUserCreateSyncEmail = functions.auth.user().onCreate(async (user) => {
-  const uid = user && user.uid ? String(user.uid) : "";
-  if (!uid) return null;
+exports.onAuthUserCreateSyncEmail = functions.auth
+  .user()
+  .onCreate(async (user) => {
+    const uid = user && user.uid ? String(user.uid) : "";
+    if (!uid) return null;
 
-  const email = normalizeEmail(user.email || "");
-  if (!email) return null;
+    const email = normalizeEmail(user.email || "");
+    if (!email) return null;
 
-  const db = admin.database();
-  const now = admin.database.ServerValue.TIMESTAMP;
+    const db = admin.database();
+    const now = admin.database.ServerValue.TIMESTAMP;
 
-  const updates = {};
-  updates[`users/${uid}/email`] = email;
-  updates[`users/${uid}/emailNormalized`] = email;
+    const updates = {};
+    updates[`users/${uid}/email`] = email;
+    updates[`users/${uid}/emailNormalized`] = email;
 
-  const key = emailKey(email);
-  if (key) {
-    updates[`admin_config/user_email_index/${key}`] = {
-      uid,
-      email,
-      updatedAtMs: now,
-      source: "auth.onCreate",
-    };
-  }
+    const key = emailKey(email);
+    if (key) {
+      updates[`admin_config/user_email_index/${key}`] = {
+        uid,
+        email,
+        updatedAtMs: now,
+        source: "auth.onCreate",
+      };
+    }
 
-  await db.ref().update(updates);
-  return { ok: true };
-});
+    await db.ref().update(updates);
+    return { ok: true };
+  });
 
 exports.adminReviewDeposit = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
@@ -758,111 +762,129 @@ exports.superAdminSetSuperAdmin = functions.https.onCall(
 
 // --- Super Admin API Keys (external API access) ---
 
-exports.superAdminCreateApiKey = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const db = admin.database();
-  await assertSuperAdminUid(db, callerUid);
+exports.superAdminCreateApiKey = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const db = admin.database();
+    await assertSuperAdminUid(db, callerUid);
 
-  const label = (data && data.label ? String(data.label) : "").trim();
-  const principalEmail = normalizeEmail((data && data.principalEmail) || "");
-  const scopes = sanitizeScopes(data && data.scopes);
+    const label = (data && data.label ? String(data.label) : "").trim();
+    const principalEmail = normalizeEmail((data && data.principalEmail) || "");
+    const scopes = sanitizeScopes(data && data.scopes);
 
-  if (!label) {
-    throw new functions.https.HttpsError("invalid-argument", "label required.");
+    if (!label) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "label required."
+      );
+    }
+
+    const keyId = db.ref("admin_config/api_keys").push().key;
+    if (!keyId) {
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to allocate key id."
+      );
+    }
+
+    const apiKey = generateApiKey();
+    const record = {
+      id: keyId,
+      label,
+      enabled: true,
+      scopes,
+      principalEmail: principalEmail || null,
+      keyPrefix: apiKey.slice(0, 8),
+      keyHash: hashApiKey(apiKey),
+      createdAtMs: admin.database.ServerValue.TIMESTAMP,
+      createdBy: callerUid,
+      revokedAtMs: null,
+      revokedBy: null,
+      lastUsedAtMs: null,
+    };
+
+    await db.ref(`admin_config/api_keys/${keyId}`).set(record);
+
+    // NOTE: apiKey is only returned once. Store it securely client-side.
+    return {
+      ok: true,
+      id: keyId,
+      apiKey,
+      keyPrefix: record.keyPrefix,
+      label,
+      enabled: true,
+      scopes,
+      principalEmail: record.principalEmail,
+    };
   }
+);
 
-  const keyId = db.ref("admin_config/api_keys").push().key;
-  if (!keyId) {
-    throw new functions.https.HttpsError("internal", "Failed to allocate key id.");
+exports.superAdminListApiKeys = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const limit = Math.max(
+      1,
+      Math.min(1000, Number((data && data.limit) || 200))
+    );
+
+    const db = admin.database();
+    await assertSuperAdminUid(db, callerUid);
+
+    const snap = await db
+      .ref("admin_config/api_keys")
+      .limitToFirst(limit)
+      .get();
+    const raw = snap.val() || {};
+
+    const items = Object.entries(raw)
+      .map(([id, value]) => {
+        const row = isPlainObject(value) ? value : {};
+        return {
+          id,
+          label: row.label || id,
+          enabled: !!row.enabled,
+          scopes: Array.isArray(row.scopes) ? row.scopes : [],
+          principalEmail: row.principalEmail || null,
+          keyPrefix: row.keyPrefix || null,
+          createdAtMs: row.createdAtMs || null,
+          createdBy: row.createdBy || null,
+          revokedAtMs: row.revokedAtMs || null,
+          revokedBy: row.revokedBy || null,
+          lastUsedAtMs: row.lastUsedAtMs || null,
+        };
+      })
+      .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+
+    return { ok: true, items };
   }
+);
 
-  const apiKey = generateApiKey();
-  const record = {
-    id: keyId,
-    label,
-    enabled: true,
-    scopes,
-    principalEmail: principalEmail || null,
-    keyPrefix: apiKey.slice(0, 8),
-    keyHash: hashApiKey(apiKey),
-    createdAtMs: admin.database.ServerValue.TIMESTAMP,
-    createdBy: callerUid,
-    revokedAtMs: null,
-    revokedBy: null,
-    lastUsedAtMs: null,
-  };
+exports.superAdminRevokeApiKey = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const id = (data && data.id ? String(data.id) : "").trim();
+    if (!id) {
+      throw new functions.https.HttpsError("invalid-argument", "id required.");
+    }
 
-  await db.ref(`admin_config/api_keys/${keyId}`).set(record);
+    const db = admin.database();
+    await assertSuperAdminUid(db, callerUid);
 
-  // NOTE: apiKey is only returned once. Store it securely client-side.
-  return {
-    ok: true,
-    id: keyId,
-    apiKey,
-    keyPrefix: record.keyPrefix,
-    label,
-    enabled: true,
-    scopes,
-    principalEmail: record.principalEmail,
-  };
-});
+    const ref = db.ref(`admin_config/api_keys/${id}`);
+    const snap = await ref.get();
+    if (!snap.exists()) {
+      throw new functions.https.HttpsError("not-found", "API key not found.");
+    }
 
-exports.superAdminListApiKeys = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const limit = Math.max(1, Math.min(1000, Number((data && data.limit) || 200)));
+    await ref.update({
+      enabled: false,
+      revokedAtMs: admin.database.ServerValue.TIMESTAMP,
+      revokedBy: callerUid,
+    });
 
-  const db = admin.database();
-  await assertSuperAdminUid(db, callerUid);
-
-  const snap = await db.ref("admin_config/api_keys").limitToFirst(limit).get();
-  const raw = snap.val() || {};
-
-  const items = Object.entries(raw)
-    .map(([id, value]) => {
-      const row = isPlainObject(value) ? value : {};
-      return {
-        id,
-        label: row.label || id,
-        enabled: !!row.enabled,
-        scopes: Array.isArray(row.scopes) ? row.scopes : [],
-        principalEmail: row.principalEmail || null,
-        keyPrefix: row.keyPrefix || null,
-        createdAtMs: row.createdAtMs || null,
-        createdBy: row.createdBy || null,
-        revokedAtMs: row.revokedAtMs || null,
-        revokedBy: row.revokedBy || null,
-        lastUsedAtMs: row.lastUsedAtMs || null,
-      };
-    })
-    .sort((a, b) => String(a.label).localeCompare(String(b.label)));
-
-  return { ok: true, items };
-});
-
-exports.superAdminRevokeApiKey = functions.https.onCall(async (data, context) => {
-  const callerUid = assertAuthed(context);
-  const id = (data && data.id ? String(data.id) : "").trim();
-  if (!id) {
-    throw new functions.https.HttpsError("invalid-argument", "id required.");
+    return { ok: true, id, enabled: false };
   }
-
-  const db = admin.database();
-  await assertSuperAdminUid(db, callerUid);
-
-  const ref = db.ref(`admin_config/api_keys/${id}`);
-  const snap = await ref.get();
-  if (!snap.exists()) {
-    throw new functions.https.HttpsError("not-found", "API key not found.");
-  }
-
-  await ref.update({
-    enabled: false,
-    revokedAtMs: admin.database.ServerValue.TIMESTAMP,
-    revokedBy: callerUid,
-  });
-
-  return { ok: true, id, enabled: false };
-});
+);
 
 exports.superAdminListAdmins = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
@@ -964,7 +986,9 @@ exports.chapaInitializePayment = functions.https.onCall(
     const currency =
       (data && data.currency ? String(data.currency) : "ETB").trim() || "ETB";
     const txRef = (data && data.txRef ? String(data.txRef) : "").trim();
-    const returnUrl = (data && data.returnUrl ? String(data.returnUrl) : "").trim();
+    const returnUrl = (
+      data && data.returnUrl ? String(data.returnUrl) : ""
+    ).trim();
     const callbackUrl = (
       data && data.callbackUrl ? String(data.callbackUrl) : ""
     ).trim();
@@ -1136,14 +1160,16 @@ exports.chapaInitializePayment = functions.https.onCall(
 
     let code = "internal";
     if (resp.status === 400 || resp.status === 422) code = "invalid-argument";
-    if (resp.status === 401 || resp.status === 403) code = "failed-precondition";
+    if (resp.status === 401 || resp.status === 403)
+      code = "failed-precondition";
     if (resp.status === 404) code = "not-found";
     if (resp.status === 429) code = "resource-exhausted";
     if (resp.status >= 500) code = "unavailable";
 
-    const safeMessage = upstreamMessage && upstreamMessage.trim().length
-      ? upstreamMessage.trim()
-      : "Chapa initialize failed";
+    const safeMessage =
+      upstreamMessage && upstreamMessage.trim().length
+        ? upstreamMessage.trim()
+        : "Chapa initialize failed";
 
     throw new functions.https.HttpsError(code, safeMessage, {
       endpoint,
@@ -1160,24 +1186,26 @@ exports.superAdminListChapaTestUsers = functions.https.onCall(
     const db = admin.database();
     await assertSuperAdminUid(db, callerUid);
 
-    const snap = await db.ref('admin_config/test_data/chapa_users').get();
+    const snap = await db.ref("admin_config/test_data/chapa_users").get();
     const raw = snap.exists() ? snap.val() : null;
     const users = [];
 
-    if (raw && typeof raw === 'object') {
+    if (raw && typeof raw === "object") {
       for (const [id, v] of Object.entries(raw)) {
-        if (!v || typeof v !== 'object') continue;
+        if (!v || typeof v !== "object") continue;
         users.push({
           id: String(id),
-          label: v.label ? String(v.label) : '',
-          email: v.email ? String(v.email) : '',
-          phone: v.phone ? String(v.phone) : '',
+          label: v.label ? String(v.label) : "",
+          email: v.email ? String(v.email) : "",
+          phone: v.phone ? String(v.phone) : "",
           updatedAtMs: v.updatedAtMs || null,
         });
       }
     }
 
-    users.sort((a, b) => String(a.label || a.email).localeCompare(String(b.label || b.email)));
+    users.sort((a, b) =>
+      String(a.label || a.email).localeCompare(String(b.label || b.email))
+    );
     return { ok: true, users };
   }
 );
@@ -1188,15 +1216,15 @@ exports.superAdminUpsertChapaTestUser = functions.https.onCall(
     const db = admin.database();
     await assertSuperAdminUid(db, callerUid);
 
-    const id = (data && data.id ? String(data.id) : '').trim();
-    const label = (data && data.label ? String(data.label) : '').trim();
-    const email = (data && data.email ? String(data.email) : '').trim();
-    const phone = (data && data.phone ? String(data.phone) : '').trim();
+    const id = (data && data.id ? String(data.id) : "").trim();
+    const label = (data && data.label ? String(data.label) : "").trim();
+    const email = (data && data.email ? String(data.email) : "").trim();
+    const phone = (data && data.phone ? String(data.phone) : "").trim();
 
     if (!id || !label || !email || !phone) {
       throw new functions.https.HttpsError(
-        'invalid-argument',
-        'id, label, email, phone required.'
+        "invalid-argument",
+        "id, label, email, phone required."
       );
     }
 
@@ -1218,9 +1246,9 @@ exports.superAdminDeleteChapaTestUser = functions.https.onCall(
     const db = admin.database();
     await assertSuperAdminUid(db, callerUid);
 
-    const id = (data && data.id ? String(data.id) : '').trim();
+    const id = (data && data.id ? String(data.id) : "").trim();
     if (!id) {
-      throw new functions.https.HttpsError('invalid-argument', 'id required.');
+      throw new functions.https.HttpsError("invalid-argument", "id required.");
     }
 
     await db.ref(`admin_config/test_data/chapa_users/${id}`).remove();
@@ -1287,7 +1315,12 @@ async function verifyChapaTransaction(secretKey, txRef) {
     });
     const text = await resp.text();
     const decoded = safeJsonParse(text);
-    return { resp, decoded, endpoint, rawTextBytes: text ? Buffer.byteLength(text, "utf8") : 0 };
+    return {
+      resp,
+      decoded,
+      endpoint,
+      rawTextBytes: text ? Buffer.byteLength(text, "utf8") : 0,
+    };
   } finally {
     clearTimeout(timeoutId);
   }
@@ -1306,7 +1339,9 @@ function isChapaSuccess(decoded) {
 function getVerifiedAmount(decoded) {
   if (!decoded || typeof decoded !== "object") return null;
   const candidate =
-    decoded.data && typeof decoded.data === "object" ? decoded.data.amount : null;
+    decoded.data && typeof decoded.data === "object"
+      ? decoded.data.amount
+      : null;
   const n = Number(candidate);
   return Number.isFinite(n) ? n : null;
 }
@@ -1337,7 +1372,9 @@ async function finalizeChapaTx({ txRef, verified, verifiedAmount }) {
   const toUserId = String(tx.toUserId || "");
   const amount = Number(tx.amount || 0);
   const effectiveAmount =
-    Number.isFinite(verifiedAmount) && verifiedAmount > 0 ? verifiedAmount : amount;
+    Number.isFinite(verifiedAmount) && verifiedAmount > 0
+      ? verifiedAmount
+      : amount;
   const fee = calculateFee(effectiveAmount);
   const net = effectiveAmount - fee;
   const points = calculatePoints(effectiveAmount);
@@ -1417,7 +1454,10 @@ async function finalizeChapaTx({ txRef, verified, verifiedAmount }) {
     });
 
     if (!result.committed) {
-      console.warn("chapaFinalize: Wallet transaction not committed", { userId, txRef });
+      console.warn("chapaFinalize: Wallet transaction not committed", {
+        userId,
+        txRef,
+      });
       return { ok: false, reason: "not-committed" };
     }
 
@@ -1449,7 +1489,9 @@ async function finalizeChapaTx({ txRef, verified, verifiedAmount }) {
   const groupResult = await groupRef.transaction((current) => {
     if (!current || typeof current !== "object") return;
 
-    const members = Array.isArray(current.members) ? current.members.map(String) : [];
+    const members = Array.isArray(current.members)
+      ? current.members.map(String)
+      : [];
     const contributionAmount = Number(current.contributionAmount || 0);
 
     if (!current.rotationState || typeof current.rotationState !== "object") {
@@ -1491,11 +1533,15 @@ async function finalizeChapaTx({ txRef, verified, verifiedAmount }) {
         ? current.scheduleConfig
         : {};
     const autoAssign = schedule.autoAssign === true;
-    const cycleLengthDays = Number(schedule.cycleLengthDays || current.frequencyDays || 30);
+    const cycleLengthDays = Number(
+      schedule.cycleLengthDays || current.frequencyDays || 30
+    );
 
     const thresholdMet =
       members.length > 0 &&
-      members.every((m) => Number(progress[m] || 0) + 1e-8 >= contributionAmount);
+      members.every(
+        (m) => Number(progress[m] || 0) + 1e-8 >= contributionAmount
+      );
 
     if (thresholdMet && autoAssign && members.length > 0) {
       const currentRound = Number(rotationState.currentRound || 0);
@@ -1507,7 +1553,9 @@ async function finalizeChapaTx({ txRef, verified, verifiedAmount }) {
       const processedAt = new Date().toISOString();
       const scheduledFor = rotationState.nextPayoutDate || processedAt;
 
-      const history = Array.isArray(rotationState.history) ? rotationState.history.slice() : [];
+      const history = Array.isArray(rotationState.history)
+        ? rotationState.history.slice()
+        : [];
       history.push({
         round: nextRound,
         memberId: recipient,
@@ -1522,7 +1570,10 @@ async function finalizeChapaTx({ txRef, verified, verifiedAmount }) {
       // Subtract one cycle worth of contributions.
       const adjusted = {};
       for (const m of members) {
-        adjusted[m] = Math.max(Number(progress[m] || 0) - contributionAmount, 0);
+        adjusted[m] = Math.max(
+          Number(progress[m] || 0) - contributionAmount,
+          0
+        );
       }
       rotationState.contributionProgress = adjusted;
 
@@ -1543,9 +1594,13 @@ async function finalizeChapaTx({ txRef, verified, verifiedAmount }) {
 
       // Advance next payout date beyond now.
       const now = new Date();
-      let nextPayoutDate = new Date(rotationState.nextPayoutDate || now.toISOString());
+      let nextPayoutDate = new Date(
+        rotationState.nextPayoutDate || now.toISOString()
+      );
       while (!(nextPayoutDate > now)) {
-        nextPayoutDate = new Date(nextPayoutDate.getTime() + cycleLengthDays * 24 * 60 * 60 * 1000);
+        nextPayoutDate = new Date(
+          nextPayoutDate.getTime() + cycleLengthDays * 24 * 60 * 60 * 1000
+        );
       }
       rotationState.nextPayoutDate = nextPayoutDate.toISOString();
 
@@ -1571,7 +1626,11 @@ async function finalizeChapaTx({ txRef, verified, verifiedAmount }) {
   });
 
   if (!groupResult.committed) {
-    console.warn("chapaFinalize: Group update not committed", { groupId, userId, txRef });
+    console.warn("chapaFinalize: Group update not committed", {
+      groupId,
+      userId,
+      txRef,
+    });
   }
 
   // Award points to the payer for contribution.
@@ -1597,7 +1656,11 @@ async function finalizeChapaTx({ txRef, verified, verifiedAmount }) {
       return current;
     });
   } catch (e) {
-    console.warn("chapaFinalize: Failed to award points", { userId, txRef, error: String(e) });
+    console.warn("chapaFinalize: Failed to award points", {
+      userId,
+      txRef,
+      error: String(e),
+    });
   }
 
   await txDbRef.update({
@@ -1611,58 +1674,68 @@ async function finalizeChapaTx({ txRef, verified, verifiedAmount }) {
   return { ok: true, status: "success" };
 }
 
-exports.chapaVerifyAndFinalize = functions.https.onCall(async (data, context) => {
-  assertAuthed(context);
-  const txRef = (data && data.txRef ? String(data.txRef) : "").trim();
-  if (!txRef) {
-    throw new functions.https.HttpsError("invalid-argument", "txRef required");
-  }
+exports.chapaVerifyAndFinalize = functions.https.onCall(
+  async (data, context) => {
+    assertAuthed(context);
+    const txRef = (data && data.txRef ? String(data.txRef) : "").trim();
+    if (!txRef) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "txRef required"
+      );
+    }
 
-  const isEmulator =
-    String(process.env.FUNCTIONS_EMULATOR || "").toLowerCase() === "true";
-  const secretKey = await getChapaSecretKey({
-    isEmulator,
-    clientSecretKey: data && data.secretKey,
-  });
-
-  if (!secretKey) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      isEmulator
-        ? "Chapa secretKey not provided for emulator. Set CHAPA_SECRET_KEY env var."
-        : "Chapa secretKey not configured."
-    );
-  }
-
-  const { resp, decoded, endpoint } = await verifyChapaTransaction(secretKey, txRef);
-  if (!resp.ok) {
-    console.error("Chapa verify failed", {
-      endpoint,
-      status: resp.status,
-      txRef,
-      decoded: decoded ? redactSensitive(decoded) : undefined,
+    const isEmulator =
+      String(process.env.FUNCTIONS_EMULATOR || "").toLowerCase() === "true";
+    const secretKey = await getChapaSecretKey({
+      isEmulator,
+      clientSecretKey: data && data.secretKey,
     });
-    throw new functions.https.HttpsError(
-      "unavailable",
-      `Chapa verify failed (${resp.status})`
-    );
-  }
 
-  const verified = isChapaSuccess(decoded);
-  const verifiedAmount = getVerifiedAmount(decoded);
-  const result = await finalizeChapaTx({ txRef, verified, verifiedAmount });
-  return { ok: true, verified, result };
-});
+    if (!secretKey) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        isEmulator
+          ? "Chapa secretKey not provided for emulator. Set CHAPA_SECRET_KEY env var."
+          : "Chapa secretKey not configured."
+      );
+    }
+
+    const { resp, decoded, endpoint } = await verifyChapaTransaction(
+      secretKey,
+      txRef
+    );
+    if (!resp.ok) {
+      console.error("Chapa verify failed", {
+        endpoint,
+        status: resp.status,
+        txRef,
+        decoded: decoded ? redactSensitive(decoded) : undefined,
+      });
+      throw new functions.https.HttpsError(
+        "unavailable",
+        `Chapa verify failed (${resp.status})`
+      );
+    }
+
+    const verified = isChapaSuccess(decoded);
+    const verifiedAmount = getVerifiedAmount(decoded);
+    const result = await finalizeChapaTx({ txRef, verified, verifiedAmount });
+    return { ok: true, verified, result };
+  }
+);
 
 exports.chapaWebhook = functions.https.onRequest(async (req, res) => {
   try {
-    const body = isPlainObject(req.body) ? req.body : safeJsonParse(req.rawBody?.toString("utf8")) || {};
+    const body = isPlainObject(req.body)
+      ? req.body
+      : safeJsonParse(req.rawBody?.toString("utf8")) || {};
     const txRef =
-      (body && (body.tx_ref || body.txRef || body.reference))
+      body && (body.tx_ref || body.txRef || body.reference)
         ? String(body.tx_ref || body.txRef || body.reference).trim()
-        : (req.query && (req.query.tx_ref || req.query.txRef))
-          ? String(req.query.tx_ref || req.query.txRef).trim()
-          : "";
+        : req.query && (req.query.tx_ref || req.query.txRef)
+        ? String(req.query.tx_ref || req.query.txRef).trim()
+        : "";
 
     if (!txRef) {
       return res.status(400).send({ ok: false, error: "tx_ref required" });
@@ -1672,7 +1745,9 @@ exports.chapaWebhook = functions.https.onRequest(async (req, res) => {
       String(process.env.FUNCTIONS_EMULATOR || "").toLowerCase() === "true";
     const secretKey = await getChapaSecretKey({ isEmulator });
     if (!secretKey) {
-      return res.status(500).send({ ok: false, error: "Chapa secretKey not configured" });
+      return res
+        .status(500)
+        .send({ ok: false, error: "Chapa secretKey not configured" });
     }
 
     const { resp, decoded } = await verifyChapaTransaction(secretKey, txRef);

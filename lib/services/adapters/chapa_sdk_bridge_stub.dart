@@ -15,5 +15,7 @@ Future<void> startChapaCheckoutWithSdk({
   required String title,
   required String description,
 }) {
-  throw UnsupportedError('Chapa SDK checkout is not supported on this platform.');
+  throw UnsupportedError(
+    'Chapa SDK checkout is not supported on this platform.',
+  );
 }

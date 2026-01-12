@@ -660,7 +660,9 @@ class _ThisRoundSummaryCard extends ConsumerWidget {
           if (phone.isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Add your phone number in Profile and try again.'),
+                content: Text(
+                  'Add your phone number in Profile and try again.',
+                ),
               ),
             );
             return;
@@ -672,7 +674,9 @@ class _ThisRoundSummaryCard extends ConsumerWidget {
             if (paymentService == null) {
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Chapa gateway is not configured.')),
+                const SnackBar(
+                  content: Text('Chapa gateway is not configured.'),
+                ),
               );
               return;
             }

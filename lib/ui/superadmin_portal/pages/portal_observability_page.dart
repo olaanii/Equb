@@ -8,7 +8,8 @@ class PortalObservabilityPage extends StatefulWidget {
   const PortalObservabilityPage({super.key});
 
   @override
-  State<PortalObservabilityPage> createState() => _PortalObservabilityPageState();
+  State<PortalObservabilityPage> createState() =>
+      _PortalObservabilityPageState();
 }
 
 class _PortalObservabilityPageState extends State<PortalObservabilityPage>
@@ -53,10 +54,7 @@ class _PortalObservabilityPageState extends State<PortalObservabilityPage>
                 labelColor: scheme.primary,
                 unselectedLabelColor: scheme.onSurfaceVariant,
                 indicatorColor: scheme.primary,
-                tabs: const [
-                  Tab(text: 'Logs'),
-                  Tab(text: 'Audit'),
-                ],
+                tabs: const [Tab(text: 'Logs'), Tab(text: 'Audit')],
               ),
               const SizedBox(height: 12),
               Expanded(

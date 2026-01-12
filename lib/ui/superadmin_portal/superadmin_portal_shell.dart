@@ -25,7 +25,8 @@ class _SuperAdminPortalShellState extends State<SuperAdminPortalShell> {
   int _index = 0;
   bool _sidebarCollapsed = false;
 
-  late final PortalConfigController _configController = PortalConfigController();
+  late final PortalConfigController _configController =
+      PortalConfigController();
   late final PortalNotificationService _notificationService =
       PortalNotificationService();
 
@@ -52,36 +53,40 @@ class _SuperAdminPortalShellState extends State<SuperAdminPortalShell> {
           title: 'Go to ${destinations[i].label}',
           subtitle: 'Open ${destinations[i].label} section',
           icon: destinations[i].icon,
-          run: () => setState(() {
-            _index = i;
-          }),
+          run:
+              () => setState(() {
+                _index = i;
+              }),
         ),
       PortalCommand(
         title: 'Config: Feature flags',
         subtitle: 'Open portal feature flags editor',
         icon: Icons.tune,
-        run: () => setState(() {
-          _index = destinations.length - 1;
-          _configController.openFeatureFlags();
-        }),
+        run:
+            () => setState(() {
+              _index = destinations.length - 1;
+              _configController.openFeatureFlags();
+            }),
       ),
       PortalCommand(
         title: 'Config: Gateways',
         subtitle: 'Open portal gateway controls',
         icon: Icons.settings_outlined,
-        run: () => setState(() {
-          _index = destinations.length - 1;
-          _configController.openGateways();
-        }),
+        run:
+            () => setState(() {
+              _index = destinations.length - 1;
+              _configController.openGateways();
+            }),
       ),
       PortalCommand(
         title: 'Config: Rules',
         subtitle: 'Open rules JSON editor',
         icon: Icons.rule_folder_outlined,
-        run: () => setState(() {
-          _index = destinations.length - 1;
-          _configController.openRules();
-        }),
+        run:
+            () => setState(() {
+              _index = destinations.length - 1;
+              _configController.openRules();
+            }),
       ),
     ];
 
@@ -123,9 +128,10 @@ class _SuperAdminPortalShellState extends State<SuperAdminPortalShell> {
     final safeIndex = _index.clamp(0, destinations.length - 1);
     final selected = destinations[safeIndex];
 
-    final child = isWide
-        ? _buildWide(context, destinations, safeIndex, selected)
-        : _buildMobile(context, destinations, safeIndex, selected);
+    final child =
+        isWide
+            ? _buildWide(context, destinations, safeIndex, selected)
+            : _buildMobile(context, destinations, safeIndex, selected);
 
     return Shortcuts(
       shortcuts: {
@@ -143,10 +149,7 @@ class _SuperAdminPortalShellState extends State<SuperAdminPortalShell> {
             },
           ),
         },
-        child: Focus(
-          autofocus: true,
-          child: child,
-        ),
+        child: Focus(autofocus: true, child: child),
       ),
     );
   }
@@ -224,9 +227,10 @@ class _SuperAdminPortalShellState extends State<SuperAdminPortalShell> {
                           alignment: Alignment.centerRight,
                           child: _SidebarCollapseButton(
                             collapsed: _sidebarCollapsed,
-                            onPressed: () => setState(
-                              () => _sidebarCollapsed = !_sidebarCollapsed,
-                            ),
+                            onPressed:
+                                () => setState(
+                                  () => _sidebarCollapsed = !_sidebarCollapsed,
+                                ),
                           ),
                         ),
                         if (!_sidebarCollapsed) ...[
@@ -242,18 +246,19 @@ class _SuperAdminPortalShellState extends State<SuperAdminPortalShell> {
                         Row(
                           children: [
                             Expanded(
-                              child: _sidebarCollapsed
-                                  ? Icon(
-                                      Icons.shield_outlined,
-                                      color: scheme.primary,
-                                    )
-                                  : Text(
-                                      'Operations & Services',
-                                      style:
-                                          theme.textTheme.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.w700,
+                              child:
+                                  _sidebarCollapsed
+                                      ? Icon(
+                                        Icons.shield_outlined,
+                                        color: scheme.primary,
+                                      )
+                                      : Text(
+                                        'Operations & Services',
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
                                       ),
-                                    ),
                             ),
                           ],
                         ),
@@ -367,9 +372,10 @@ class _SidebarItem extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    final bg = selected
-        ? scheme.primary.withOpacity(0.14)
-        : scheme.surface.withOpacity(0);
+    final bg =
+        selected
+            ? scheme.primary.withOpacity(0.14)
+            : scheme.surface.withOpacity(0);
     final fg = selected ? scheme.primary : scheme.onSurface.withOpacity(0.85);
 
     return Padding(
@@ -389,7 +395,9 @@ class _SidebarItem extends StatelessWidget {
               ),
               child: Row(
                 mainAxisAlignment:
-                    collapsed ? MainAxisAlignment.center : MainAxisAlignment.start,
+                    collapsed
+                        ? MainAxisAlignment.center
+                        : MainAxisAlignment.start,
                 children: [
                   Icon(icon, color: fg),
                   if (!collapsed) ...[
@@ -404,11 +412,7 @@ class _SidebarItem extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (selected)
-                      Icon(
-                        Icons.chevron_right,
-                        color: fg,
-                      ),
+                    if (selected) Icon(Icons.chevron_right, color: fg),
                   ],
                 ],
               ),
@@ -443,7 +447,9 @@ class _SidebarCollapseButton extends StatelessWidget {
         constraints: const BoxConstraints.tightFor(width: 36, height: 36),
         icon: Icon(
           // Matches the provided “sidebar” glyph closely.
-          collapsed ? CupertinoIcons.sidebar_right : CupertinoIcons.sidebar_left,
+          collapsed
+              ? CupertinoIcons.sidebar_right
+              : CupertinoIcons.sidebar_left,
           color: scheme.onSurfaceVariant,
         ),
       ),

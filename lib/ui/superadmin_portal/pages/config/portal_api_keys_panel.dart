@@ -153,10 +153,12 @@ class _PortalApiKeysPanelState extends State<PortalApiKeysPanel> {
                     style: theme.textTheme.bodySmall,
                   )
                 else if (snapshot.connectionState == ConnectionState.waiting)
-                  const Center(child: Padding(
-                    padding: EdgeInsets.all(24.0),
-                    child: CircularProgressIndicator(),
-                  ))
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
                 else if (items.isEmpty)
                   Text('No keys found.', style: theme.textTheme.bodyMedium)
                 else
@@ -270,10 +272,9 @@ class _CreatedKeyCard extends StatelessWidget {
           children: [
             Text(
               'New key (shown once)',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
             Text('id: $id'),
@@ -317,9 +318,12 @@ class _ApiKeyRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label,
-                      style: theme.textTheme.titleSmall
-                          ?.copyWith(fontWeight: FontWeight.w800)),
+                  Text(
+                    label,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     'id: ${(row['id'] ?? '').toString()}  prefix: ${(row['keyPrefix'] ?? '').toString()}',
@@ -327,13 +331,17 @@ class _ApiKeyRow extends StatelessWidget {
                   ),
                   if (principalEmail.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Text('owner: $principalEmail',
-                        style: theme.textTheme.bodySmall),
+                    Text(
+                      'owner: $principalEmail',
+                      style: theme.textTheme.bodySmall,
+                    ),
                   ],
                   if (scopeText.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Text('scopes: $scopeText',
-                        style: theme.textTheme.bodySmall),
+                    Text(
+                      'scopes: $scopeText',
+                      style: theme.textTheme.bodySmall,
+                    ),
                   ],
                 ],
               ),

@@ -51,7 +51,8 @@ class AppSnackbar {
 
     final phase = SchedulerBinding.instance.schedulerPhase;
     final isSafeNow =
-        phase == SchedulerPhase.idle || phase == SchedulerPhase.postFrameCallbacks;
+        phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks;
 
     if (isSafeNow) {
       present();

@@ -200,12 +200,13 @@ class _WalletSummaryCardState extends ConsumerState<_WalletSummaryCard> {
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
-    final amountText = _isHidden
-      ? 'ETB ****'
-      : summaryAsync.maybeWhen(
-        data: (summary) => 'ETB ${summary.available.toStringAsFixed(2)}',
-        orElse: () => 'ETB —',
-        );
+    final amountText =
+        _isHidden
+            ? 'ETB ****'
+            : summaryAsync.maybeWhen(
+              data: (summary) => 'ETB ${summary.available.toStringAsFixed(2)}',
+              orElse: () => 'ETB —',
+            );
     final toggleVisibilityTooltip =
         _isHidden ? 'Show savings balance' : 'Hide savings balance';
     final collapseTooltip =

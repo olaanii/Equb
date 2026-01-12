@@ -59,29 +59,20 @@ class _WalletTabScreenState extends ConsumerState<WalletTabScreen> {
                     loading:
                         () => Text(
                           'ETB —',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.displayMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                          style: Theme.of(context).textTheme.displayMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                     error:
                         (_, __) => Text(
                           'ETB —',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.displayMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                          style: Theme.of(context).textTheme.displayMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                     data:
                         (summary) => Text(
                           'ETB ${summary.available.toStringAsFixed(2)}',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.displayMedium?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+                          style: Theme.of(context).textTheme.displayMedium
+                              ?.copyWith(fontWeight: FontWeight.w800),
                         ),
                   ),
                   const SizedBox(height: 14),
@@ -136,9 +127,9 @@ class _WalletTabScreenState extends ConsumerState<WalletTabScreen> {
               error:
                   (err, _) => Text(
                     'Failed to load transactions: $err',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: scheme.error,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: scheme.error),
                   ),
               data: (txs) {
                 final uid = user?.id;
@@ -151,17 +142,16 @@ class _WalletTabScreenState extends ConsumerState<WalletTabScreen> {
                   );
                 }
 
-                final chapa =
-                    txs
-                        .where(
-                          (t) =>
-                              t.gateway.toLowerCase() == 'chapa' &&
-                              (t.status == TransactionStatus.success ||
-                                  t.verificationStatus ==
-                                      TransactionStatus.success),
-                        )
-                        .toList(growable: false)
-                      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+                final chapa = txs
+                  .where(
+                    (t) =>
+                        t.gateway.toLowerCase() == 'chapa' &&
+                        (t.status == TransactionStatus.success ||
+                            t.verificationStatus == TransactionStatus.success),
+                  )
+                  .toList(
+                    growable: false,
+                  )..sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
                 if (chapa.isEmpty) {
                   return Text(
@@ -329,21 +319,19 @@ class _WalletTxTile extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
 
     final isDeposit =
-      transaction.fromUserId == currentUserId &&
-      transaction.toUserId == 'wallet';
+        transaction.fromUserId == currentUserId &&
+        transaction.toUserId == 'wallet';
     final isWithdraw =
-      transaction.fromUserId == 'wallet' &&
-      transaction.toUserId == currentUserId;
+        transaction.fromUserId == 'wallet' &&
+        transaction.toUserId == currentUserId;
     final isPositive = isDeposit;
 
     final title =
-      isDeposit
-        ? 'Top up'
-        : (isWithdraw ? 'Withdraw' : 'Transaction');
+        isDeposit ? 'Top up' : (isWithdraw ? 'Withdraw' : 'Transaction');
     final sign = isDeposit ? '+' : (isWithdraw ? '-' : '');
     final amountText = '$sign ${transaction.amount.toStringAsFixed(2)}';
     final subtitle =
-      '${_formatShortDate(transaction.timestamp)} • ${transaction.gateway}';
+        '${_formatShortDate(transaction.timestamp)} • ${transaction.gateway}';
 
     return Card(
       child: ListTile(

@@ -199,9 +199,7 @@ class AdvancedAdminService {
     final groups = await equbRepository.listGroups();
     final pendingDocs = await idDocumentRepository.getPendingDocuments();
 
-    final memberIds = <String>{
-      for (final g in groups) ...g.members,
-    };
+    final memberIds = <String>{for (final g in groups) ...g.members};
 
     var totalUsers = 0;
     var activeUsers = 0;
@@ -220,7 +218,8 @@ class AdvancedAdminService {
           var isActive = memberIds.contains(userId);
 
           final data = Map<String, dynamic>.from(value);
-          final walletBalance = (data['walletBalance'] as num?)?.toDouble() ?? 0;
+          final walletBalance =
+              (data['walletBalance'] as num?)?.toDouble() ?? 0;
           final points = (data['points'] as int?) ?? 0;
           if (walletBalance > 0 || points > 0) {
             isActive = true;
@@ -275,8 +274,7 @@ class AdvancedAdminService {
     // A simple availability signal (not a fabricated KPI): higher when there
     // are fewer pending items relative to user count.
     final denom = (totalUsers + pendingDocs.length).clamp(1, 1 << 30);
-    final systemHealth =
-        (1.0 - (pendingDocs.length / denom)).clamp(0.0, 1.0);
+    final systemHealth = (1.0 - (pendingDocs.length / denom)).clamp(0.0, 1.0);
 
     return AdminDashboardStats(
       totalUsers: totalUsers,

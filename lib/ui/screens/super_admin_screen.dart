@@ -44,10 +44,11 @@ class _SuperAdminScreenState extends ConsumerState<SuperAdminScreen> {
       _SuperAdminPanelItem(
         label: 'Logs',
         icon: Icons.list_alt_outlined,
-        builder: (_) => _LogsPanel(
-          filter: _filter,
-          onFilterChanged: (value) => setState(() => _filter = value),
-        ),
+        builder:
+            (_) => _LogsPanel(
+              filter: _filter,
+              onFilterChanged: (value) => setState(() => _filter = value),
+            ),
       ),
       _SuperAdminPanelItem(
         label: 'Rules',
@@ -88,7 +89,8 @@ class _SuperAdminScreenState extends ConsumerState<SuperAdminScreen> {
           AdminNavigationRail(
             title: 'Super Admin',
             selectedIndex: safeIndex,
-            onDestinationSelected: (value) => setState(() => _panelIndex = value),
+            onDestinationSelected:
+                (value) => setState(() => _panelIndex = value),
             destinations: [
               for (final panel in panels)
                 AdminRailDestination(label: panel.label, icon: panel.icon),
@@ -100,7 +102,9 @@ class _SuperAdminScreenState extends ConsumerState<SuperAdminScreen> {
               padding: context.pagePadding,
               child: Center(
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: context.contentMaxWidth),
+                  constraints: BoxConstraints(
+                    maxWidth: context.contentMaxWidth,
+                  ),
                   child: selected.builder(context),
                 ),
               ),

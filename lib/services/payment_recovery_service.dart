@@ -38,8 +38,8 @@ class PaymentRecoveryService {
 
       final payload = <String, dynamic>{'txRef': txRef};
       if (_kUseFirebaseEmulators) {
-        final secret = (await secureStorage.read('gateway.chapa.secretKey'))
-            ?.trim();
+        final secret =
+            (await secureStorage.read('gateway.chapa.secretKey'))?.trim();
         if (secret != null && secret.isNotEmpty) {
           payload['secretKey'] = secret;
         }
@@ -71,9 +71,7 @@ class PaymentRecoveryService {
 
   Future<String?> _findLatestPendingChapaTxRef({required String userId}) async {
     try {
-      final ref = database
-          .ref('users/$userId/transactions')
-          .limitToLast(50);
+      final ref = database.ref('users/$userId/transactions').limitToLast(50);
       final snapshot = await ref.get();
       if (!snapshot.exists || snapshot.value == null) return null;
 
@@ -97,12 +95,14 @@ class PaymentRecoveryService {
         }
       }
 
-      final pending = transactions
-          .where(
-            (tx) =>
-                tx.gateway == 'chapa' && tx.status == TransactionStatus.pending,
-          )
-          .toList();
+      final pending =
+          transactions
+              .where(
+                (tx) =>
+                    tx.gateway == 'chapa' &&
+                    tx.status == TransactionStatus.pending,
+              )
+              .toList();
 
       if (pending.isEmpty) return null;
 

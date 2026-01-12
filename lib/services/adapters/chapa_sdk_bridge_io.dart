@@ -19,7 +19,9 @@ Future<void> startChapaCheckoutWithSdk({
   // The official SDK is primarily designed for Android/iOS. Avoid invoking it
   // on desktop platforms even though they are "io".
   if (!(Platform.isAndroid || Platform.isIOS)) {
-    throw UnsupportedError('Chapa SDK checkout is only supported on Android/iOS.');
+    throw UnsupportedError(
+      'Chapa SDK checkout is only supported on Android/iOS.',
+    );
   }
 
   Chapa.paymentParameters(

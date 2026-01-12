@@ -120,10 +120,7 @@ Future<void> _bootstrapGatewaySecretsFromDartDefines() async {
       await storage.write('gateway.chapa.secretKey', chapaSecretKey.trim());
     }
     if (hasCallbackUrl) {
-      await storage.write(
-        'gateway.chapa.callbackUrl',
-        chapaCallbackUrl.trim(),
-      );
+      await storage.write('gateway.chapa.callbackUrl', chapaCallbackUrl.trim());
     }
     if (hasReturnUrl) {
       await storage.write('gateway.chapa.returnUrl', chapaReturnUrl.trim());

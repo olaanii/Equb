@@ -24,37 +24,37 @@ class ToastService {
       // Clear previous snackbars immediately
       scaffoldMessenger.removeCurrentSnackBar();
 
-    Color backgroundColor;
-    IconData icon;
-    Color iconColor;
-    Color textColor = Colors.white;
+      Color backgroundColor;
+      IconData icon;
+      Color iconColor;
+      Color textColor = Colors.white;
 
-    switch (type) {
-      case ToastType.success:
-        backgroundColor = AppColors.primary;
-        icon = Icons.check_circle_outline;
-        iconColor = Colors.black;
-        textColor = Colors.black;
-        break;
-      case ToastType.error:
-        backgroundColor = AppColors.error;
-        icon = Icons.error_outline;
-        iconColor = Colors.white;
-        textColor = Colors.white;
-        break;
-      case ToastType.warning:
-        backgroundColor = AppColors.warning;
-        icon = Icons.warning_amber_outlined;
-        iconColor = Colors.black;
-        textColor = Colors.black;
-        break;
-      case ToastType.info:
-        backgroundColor = isDark ? AppColors.surfaceBrightDark : Colors.black;
-        icon = Icons.info_outline;
-        iconColor = AppColors.primary;
-        textColor = Colors.white;
-        break;
-    }
+      switch (type) {
+        case ToastType.success:
+          backgroundColor = AppColors.primary;
+          icon = Icons.check_circle_outline;
+          iconColor = Colors.black;
+          textColor = Colors.black;
+          break;
+        case ToastType.error:
+          backgroundColor = AppColors.error;
+          icon = Icons.error_outline;
+          iconColor = Colors.white;
+          textColor = Colors.white;
+          break;
+        case ToastType.warning:
+          backgroundColor = AppColors.warning;
+          icon = Icons.warning_amber_outlined;
+          iconColor = Colors.black;
+          textColor = Colors.black;
+          break;
+        case ToastType.info:
+          backgroundColor = isDark ? AppColors.surfaceBrightDark : Colors.black;
+          icon = Icons.info_outline;
+          iconColor = AppColors.primary;
+          textColor = Colors.white;
+          break;
+      }
 
       scaffoldMessenger.showSnackBar(
         SnackBar(
@@ -88,7 +88,8 @@ class ToastService {
 
     final phase = SchedulerBinding.instance.schedulerPhase;
     final isSafeNow =
-        phase == SchedulerPhase.idle || phase == SchedulerPhase.postFrameCallbacks;
+        phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks;
 
     if (isSafeNow) {
       present();

@@ -2,7 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 
 class PortalApiKeysService {
   PortalApiKeysService({FirebaseFunctions? functions})
-      : _functions = functions ?? FirebaseFunctions.instance;
+    : _functions = functions ?? FirebaseFunctions.instance;
 
   final FirebaseFunctions _functions;
 
