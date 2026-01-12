@@ -1,7 +1,45 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const crypto = require("crypto");
 
 admin.initializeApp();
+
+function safeJsonParse(text) {
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    return null;
+  }
+}
+
+function redactSensitive(value) {
+  const SENSITIVE_KEYS = new Set([
+    "apiKey",
+    "apikey",
+    "depositKey",
+    "secret",
+    "token",
+    "authorization",
+    "password",
+  ]);
+
+  if (Array.isArray(value)) {
+    return value.map(redactSensitive);
+  }
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (SENSITIVE_KEYS.has(String(k))) {
+      out[k] = "[REDACTED]";
+    } else {
+      out[k] = redactSensitive(v);
+    }
+  }
+  return out;
+}
 
 function assertAuthed(context) {
   if (!context.auth || !context.auth.uid) {
@@ -44,6 +82,35 @@ async function assertSuperAdminUid(db, callerUid) {
   );
 }
 
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function emailKey(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return "";
+  // RTDB keys cannot contain '.', '#', '$', '[', ']', or '/'.
+  // Use base64url to ensure a safe key.
+  return Buffer.from(normalized, "utf8").toString("base64url");
+}
+
+function generateApiKey() {
+  // Human-recognizable prefix + enough entropy.
+  return `eqb_${crypto.randomBytes(24).toString("base64url")}`;
+}
+
+function hashApiKey(apiKey) {
+  return crypto.createHash("sha256").update(String(apiKey)).digest("hex");
+}
+
+function sanitizeScopes(scopes) {
+  if (!Array.isArray(scopes)) return [];
+  return scopes
+    .map((s) => String(s || "").trim())
+    .filter((s) => s.length > 0)
+    .slice(0, 25);
+}
+
 exports.bootstrapAdmin = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
   const setupCode = (
@@ -76,6 +143,36 @@ exports.bootstrapAdmin = functions.https.onCall(async (data, context) => {
 
   await db.ref().update(updates);
   return { ok: true, uid: callerUid, admin: true };
+});
+
+// --- User email sync/index (server-managed) ---
+
+exports.onAuthUserCreateSyncEmail = functions.auth.user().onCreate(async (user) => {
+  const uid = user && user.uid ? String(user.uid) : "";
+  if (!uid) return null;
+
+  const email = normalizeEmail(user.email || "");
+  if (!email) return null;
+
+  const db = admin.database();
+  const now = admin.database.ServerValue.TIMESTAMP;
+
+  const updates = {};
+  updates[`users/${uid}/email`] = email;
+  updates[`users/${uid}/emailNormalized`] = email;
+
+  const key = emailKey(email);
+  if (key) {
+    updates[`admin_config/user_email_index/${key}`] = {
+      uid,
+      email,
+      updatedAtMs: now,
+      source: "auth.onCreate",
+    };
+  }
+
+  await db.ref().update(updates);
+  return { ok: true };
 });
 
 exports.adminReviewDeposit = functions.https.onCall(async (data, context) => {
@@ -659,6 +756,114 @@ exports.superAdminSetSuperAdmin = functions.https.onCall(
   }
 );
 
+// --- Super Admin API Keys (external API access) ---
+
+exports.superAdminCreateApiKey = functions.https.onCall(async (data, context) => {
+  const callerUid = assertAuthed(context);
+  const db = admin.database();
+  await assertSuperAdminUid(db, callerUid);
+
+  const label = (data && data.label ? String(data.label) : "").trim();
+  const principalEmail = normalizeEmail((data && data.principalEmail) || "");
+  const scopes = sanitizeScopes(data && data.scopes);
+
+  if (!label) {
+    throw new functions.https.HttpsError("invalid-argument", "label required.");
+  }
+
+  const keyId = db.ref("admin_config/api_keys").push().key;
+  if (!keyId) {
+    throw new functions.https.HttpsError("internal", "Failed to allocate key id.");
+  }
+
+  const apiKey = generateApiKey();
+  const record = {
+    id: keyId,
+    label,
+    enabled: true,
+    scopes,
+    principalEmail: principalEmail || null,
+    keyPrefix: apiKey.slice(0, 8),
+    keyHash: hashApiKey(apiKey),
+    createdAtMs: admin.database.ServerValue.TIMESTAMP,
+    createdBy: callerUid,
+    revokedAtMs: null,
+    revokedBy: null,
+    lastUsedAtMs: null,
+  };
+
+  await db.ref(`admin_config/api_keys/${keyId}`).set(record);
+
+  // NOTE: apiKey is only returned once. Store it securely client-side.
+  return {
+    ok: true,
+    id: keyId,
+    apiKey,
+    keyPrefix: record.keyPrefix,
+    label,
+    enabled: true,
+    scopes,
+    principalEmail: record.principalEmail,
+  };
+});
+
+exports.superAdminListApiKeys = functions.https.onCall(async (data, context) => {
+  const callerUid = assertAuthed(context);
+  const limit = Math.max(1, Math.min(1000, Number((data && data.limit) || 200)));
+
+  const db = admin.database();
+  await assertSuperAdminUid(db, callerUid);
+
+  const snap = await db.ref("admin_config/api_keys").limitToFirst(limit).get();
+  const raw = snap.val() || {};
+
+  const items = Object.entries(raw)
+    .map(([id, value]) => {
+      const row = isPlainObject(value) ? value : {};
+      return {
+        id,
+        label: row.label || id,
+        enabled: !!row.enabled,
+        scopes: Array.isArray(row.scopes) ? row.scopes : [],
+        principalEmail: row.principalEmail || null,
+        keyPrefix: row.keyPrefix || null,
+        createdAtMs: row.createdAtMs || null,
+        createdBy: row.createdBy || null,
+        revokedAtMs: row.revokedAtMs || null,
+        revokedBy: row.revokedBy || null,
+        lastUsedAtMs: row.lastUsedAtMs || null,
+      };
+    })
+    .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+
+  return { ok: true, items };
+});
+
+exports.superAdminRevokeApiKey = functions.https.onCall(async (data, context) => {
+  const callerUid = assertAuthed(context);
+  const id = (data && data.id ? String(data.id) : "").trim();
+  if (!id) {
+    throw new functions.https.HttpsError("invalid-argument", "id required.");
+  }
+
+  const db = admin.database();
+  await assertSuperAdminUid(db, callerUid);
+
+  const ref = db.ref(`admin_config/api_keys/${id}`);
+  const snap = await ref.get();
+  if (!snap.exists()) {
+    throw new functions.https.HttpsError("not-found", "API key not found.");
+  }
+
+  await ref.update({
+    enabled: false,
+    revokedAtMs: admin.database.ServerValue.TIMESTAMP,
+    revokedBy: callerUid,
+  });
+
+  return { ok: true, id, enabled: false };
+});
+
 exports.superAdminListAdmins = functions.https.onCall(async (data, context) => {
   const callerUid = assertAuthed(context);
   const limit = Math.max(
@@ -748,177 +953,746 @@ exports.superAdminSetGatewaySecret = functions.https.onCall(
   }
 );
 
-// --- FenanPay (web CORS-safe intent creation) ---
+// --- Chapa (web CORS-safe initialize) ---
 
-exports.fenanpayCreateIntent = functions.https.onCall(async (data, context) => {
-  // Any authenticated user can initiate a checkout; the secret is kept server-side.
-  assertAuthed(context);
+exports.chapaInitializePayment = functions.https.onCall(
+  async (data, context) => {
+    // Any authenticated user can initiate a checkout; the secret is kept server-side.
+    assertAuthed(context);
 
-  const amount = Number(data && data.amount);
-  const currency =
-    (data && data.currency ? String(data.currency) : "ETB").trim() || "ETB";
-  const paymentIntentUniqueId = (
-    data && data.paymentIntentUniqueId ? String(data.paymentIntentUniqueId) : ""
-  ).trim();
+    const amount = Number(data && data.amount);
+    const currency =
+      (data && data.currency ? String(data.currency) : "ETB").trim() || "ETB";
+    const txRef = (data && data.txRef ? String(data.txRef) : "").trim();
+    const returnUrl = (data && data.returnUrl ? String(data.returnUrl) : "").trim();
+    const callbackUrl = (
+      data && data.callbackUrl ? String(data.callbackUrl) : ""
+    ).trim();
+    const email = (data && data.email ? String(data.email) : "").trim();
+    const firstName = (
+      data && data.firstName ? String(data.firstName) : ""
+    ).trim();
+    const lastName = (
+      data && data.lastName ? String(data.lastName) : ""
+    ).trim();
+    const phoneNumber = (
+      data && data.phoneNumber ? String(data.phoneNumber) : ""
+    ).trim();
 
-  if (!Number.isFinite(amount) || amount <= 0) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "amount must be > 0"
-    );
-  }
-  if (!paymentIntentUniqueId) {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "paymentIntentUniqueId required"
-    );
-  }
-
-  const methods = Array.isArray(data && data.methods)
-    ? data.methods.map(String)
-    : [];
-  const returnUrl = (
-    data && data.returnUrl ? String(data.returnUrl) : ""
-  ).trim();
-  const expireIn = Math.max(
-    60,
-    Math.min(86400, Number((data && data.expireIn) || 3600))
-  );
-  const commissionPaidByCustomer = !!(data && data.commissionPaidByCustomer);
-  const callbackUrl = (
-    data && data.callbackUrl ? String(data.callbackUrl) : ""
-  ).trim();
-
-  const db = admin.database();
-  const secretSnap = await db
-    .ref("admin_config/gateway_secrets/fenanpay/secrets")
-    .get();
-  const secrets = secretSnap.exists() ? secretSnap.val() || {} : {};
-  const isEmulator =
-    String(process.env.FUNCTIONS_EMULATOR || "").toLowerCase() === "true";
-
-  let apiKey = (secrets.depositKey || secrets.apiKey || "").toString().trim();
-  if (!apiKey && isEmulator) {
-    // Dev-only escape hatch: allow passing the sandbox key from the client
-    // when running locally. Never enabled in production.
-    apiKey = ((data && (data.depositKey || data.apiKey)) || "")
-      .toString()
-      .trim();
-  }
-  if (!apiKey) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "FenanPay deposit key not configured. Set admin_config/gateway_secrets/fenanpay/secrets.depositKey (or apiKey)."
-    );
-  }
-
-  const endpoint = "https://api.fenanpay.com/api/v1/payment/sandbox/intent";
-  const body = {
-    amount,
-    currency,
-    paymentIntentUniqueId,
-    ...(methods.length ? { methods } : {}),
-    returnUrl,
-    expireIn,
-    commissionPaidByCustomer,
-    ...(callbackUrl ? { callbackUrl } : {}),
-    customerInfo: { name: context.auth.uid },
-  };
-
-  let resp;
-  const startedAtMs = Date.now();
-  const controller = new AbortController();
-  // Sandbox can be slow; use a longer timeout so we can capture real upstream errors.
-  const timeoutMs = 45000;
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    resp = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apiKey,
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-  } catch (e) {
-    const isAbort = e && typeof e === "object" && e.name === "AbortError";
-    if (isAbort) {
-      const elapsedMs = Date.now() - startedAtMs;
+    if (!Number.isFinite(amount) || amount <= 0) {
       throw new functions.https.HttpsError(
-        "deadline-exceeded",
-        `FenanPay request timed out after ${timeoutMs}ms`,
-        { timeoutMs, elapsedMs, endpoint }
+        "invalid-argument",
+        "amount must be > 0"
+      );
+    }
+    if (!txRef) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "txRef required"
+      );
+    }
+    if (!email) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "email required"
+      );
+    }
+    if (!returnUrl || !/^https?:\/\//i.test(returnUrl)) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "returnUrl must be a valid http(s) URL"
+      );
+    }
+    if (callbackUrl && !/^https?:\/\//i.test(callbackUrl)) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "callbackUrl must be a valid http(s) URL"
       );
     }
 
-    throw new functions.https.HttpsError(
-      "internal",
-      "FenanPay request failed",
-      { endpoint, cause: String(e) }
-    );
+    const isEmulator =
+      String(process.env.FUNCTIONS_EMULATOR || "").toLowerCase() === "true";
+
+    // IMPORTANT:
+    // When running the Functions emulator without the RTDB emulator, any call to
+    // admin.database() will hit production. To keep local dev safe, never read
+    // gateway secrets from RTDB in emulator mode.
+    let secretKey = "";
+    if (isEmulator) {
+      secretKey = ((data && data.secretKey) || "").toString().trim();
+      if (!secretKey) {
+        secretKey = String(process.env.CHAPA_SECRET_KEY || "").trim();
+      }
+    } else {
+      const db = admin.database();
+      const secretSnap = await db
+        .ref("admin_config/gateway_secrets/chapa/secrets")
+        .get();
+      const secrets = secretSnap.exists() ? secretSnap.val() || {} : {};
+      secretKey = (secrets.secretKey || secrets.chapaSecretKey || "")
+        .toString()
+        .trim();
+    }
+
+    if (!secretKey) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        isEmulator
+          ? "Chapa secretKey not provided for emulator. Pass secretKey from the client (dev-only) or set CHAPA_SECRET_KEY env var."
+          : "Chapa secretKey not configured. Set admin_config/gateway_secrets/chapa/secrets.secretKey."
+      );
+    }
+
+    const endpoint = "https://api.chapa.co/v1/transaction/initialize";
+
+    async function postInitialize(requestBody) {
+      const startedAtMs = Date.now();
+      const controller = new AbortController();
+      const timeoutMs = 45000;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const resp = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${secretKey}`,
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+        const text = await resp.text();
+        return { resp, text, elapsedMs: Date.now() - startedAtMs, timeoutMs };
+      } catch (e) {
+        const isAbort = e && typeof e === "object" && e.name === "AbortError";
+        if (isAbort) {
+          const elapsedMs = Date.now() - startedAtMs;
+          throw new functions.https.HttpsError(
+            "deadline-exceeded",
+            `Chapa request timed out after ${timeoutMs}ms`,
+            { timeoutMs, elapsedMs, endpoint }
+          );
+        }
+        throw new functions.https.HttpsError(
+          "internal",
+          "Chapa request failed",
+          { endpoint, cause: String(e) }
+        );
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    const requestBody = {
+      amount: amount.toFixed(2),
+      currency,
+      email,
+      first_name: firstName || context.auth.uid,
+      last_name: lastName || "",
+      tx_ref: txRef,
+      return_url: returnUrl,
+      ...(callbackUrl ? { callback_url: callbackUrl } : {}),
+      ...(phoneNumber ? { phone_number: phoneNumber } : {}),
+    };
+
+    const { resp, text, elapsedMs } = await postInitialize(requestBody);
+
+    if (resp.ok) {
+      const decoded = safeJsonParse(text);
+      const checkoutUrl =
+        decoded &&
+        typeof decoded === "object" &&
+        decoded.data &&
+        typeof decoded.data === "object" &&
+        decoded.data.checkout_url
+          ? String(decoded.data.checkout_url).trim()
+          : "";
+
+      if (!checkoutUrl) {
+        throw new functions.https.HttpsError(
+          "internal",
+          "Chapa response missing checkout_url",
+          { endpoint }
+        );
+      }
+
+      return { ok: true, checkoutUrl };
+    }
+
+    const upstream = safeJsonParse(text);
+    const upstreamMessage =
+      upstream && typeof upstream === "object" && upstream.message
+        ? String(upstream.message)
+        : "";
+
+    console.error("Chapa initialize failed", {
+      endpoint,
+      status: resp.status,
+      elapsedMs,
+      upstreamMessage,
+      request: redactSensitive(requestBody),
+      upstream: upstream ? redactSensitive(upstream) : undefined,
+      rawBodyBytes: text ? Buffer.byteLength(text, "utf8") : 0,
+    });
+
+    let code = "internal";
+    if (resp.status === 400 || resp.status === 422) code = "invalid-argument";
+    if (resp.status === 401 || resp.status === 403) code = "failed-precondition";
+    if (resp.status === 404) code = "not-found";
+    if (resp.status === 429) code = "resource-exhausted";
+    if (resp.status >= 500) code = "unavailable";
+
+    const safeMessage = upstreamMessage && upstreamMessage.trim().length
+      ? upstreamMessage.trim()
+      : "Chapa initialize failed";
+
+    throw new functions.https.HttpsError(code, safeMessage, {
+      endpoint,
+      status: resp.status,
+    });
+  }
+);
+
+// --- Superadmin: Chapa test users fixtures ---
+
+exports.superAdminListChapaTestUsers = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const db = admin.database();
+    await assertSuperAdminUid(db, callerUid);
+
+    const snap = await db.ref('admin_config/test_data/chapa_users').get();
+    const raw = snap.exists() ? snap.val() : null;
+    const users = [];
+
+    if (raw && typeof raw === 'object') {
+      for (const [id, v] of Object.entries(raw)) {
+        if (!v || typeof v !== 'object') continue;
+        users.push({
+          id: String(id),
+          label: v.label ? String(v.label) : '',
+          email: v.email ? String(v.email) : '',
+          phone: v.phone ? String(v.phone) : '',
+          updatedAtMs: v.updatedAtMs || null,
+        });
+      }
+    }
+
+    users.sort((a, b) => String(a.label || a.email).localeCompare(String(b.label || b.email)));
+    return { ok: true, users };
+  }
+);
+
+exports.superAdminUpsertChapaTestUser = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const db = admin.database();
+    await assertSuperAdminUid(db, callerUid);
+
+    const id = (data && data.id ? String(data.id) : '').trim();
+    const label = (data && data.label ? String(data.label) : '').trim();
+    const email = (data && data.email ? String(data.email) : '').trim();
+    const phone = (data && data.phone ? String(data.phone) : '').trim();
+
+    if (!id || !label || !email || !phone) {
+      throw new functions.https.HttpsError(
+        'invalid-argument',
+        'id, label, email, phone required.'
+      );
+    }
+
+    await db.ref(`admin_config/test_data/chapa_users/${id}`).set({
+      label,
+      email,
+      phone,
+      updatedAtMs: admin.database.ServerValue.TIMESTAMP,
+      updatedBy: callerUid,
+    });
+
+    return { ok: true };
+  }
+);
+
+exports.superAdminDeleteChapaTestUser = functions.https.onCall(
+  async (data, context) => {
+    const callerUid = assertAuthed(context);
+    const db = admin.database();
+    await assertSuperAdminUid(db, callerUid);
+
+    const id = (data && data.id ? String(data.id) : '').trim();
+    if (!id) {
+      throw new functions.https.HttpsError('invalid-argument', 'id required.');
+    }
+
+    await db.ref(`admin_config/test_data/chapa_users/${id}`).remove();
+    return { ok: true };
+  }
+);
+
+function parseChapaTxRef(txRef) {
+  const raw = String(txRef || "").trim();
+  // Format generated by the Flutter app: chapa~<uid>~<ms>
+  const parts = raw.split("~");
+  if (parts.length >= 3 && parts[0] === "chapa") {
+    const userId = String(parts[1] || "").trim();
+    return { userId, txRef: raw };
+  }
+  return { userId: "", txRef: raw };
+}
+
+function calculateFee(amount) {
+  const a = Number(amount || 0);
+  const rate = a >= 10000 ? 0.005 : 0.001;
+  let fee = a * rate;
+  if (a >= 1000000) fee = fee * 0.1;
+  return fee;
+}
+
+function calculatePoints(amount) {
+  const a = Number(amount || 0);
+  let points = Math.floor(a / 100);
+  if (a >= 10000) points += 50;
+  if (a >= 100000) points += 500;
+  return Math.max(0, points);
+}
+
+async function getChapaSecretKey({ isEmulator, clientSecretKey }) {
+  if (isEmulator) {
+    const fromClient = String(clientSecretKey || "").trim();
+    if (fromClient) return fromClient;
+    return String(process.env.CHAPA_SECRET_KEY || "").trim();
+  }
+
+  const db = admin.database();
+  const secretSnap = await db
+    .ref("admin_config/gateway_secrets/chapa/secrets")
+    .get();
+  const secrets = secretSnap.exists() ? secretSnap.val() || {} : {};
+  return String(secrets.secretKey || secrets.chapaSecretKey || "").trim();
+}
+
+async function verifyChapaTransaction(secretKey, txRef) {
+  const endpoint = `https://api.chapa.co/v1/transaction/verify/${encodeURIComponent(
+    String(txRef)
+  )}`;
+  const controller = new AbortController();
+  const timeoutMs = 45000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const resp = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+      },
+      signal: controller.signal,
+    });
+    const text = await resp.text();
+    const decoded = safeJsonParse(text);
+    return { resp, decoded, endpoint, rawTextBytes: text ? Buffer.byteLength(text, "utf8") : 0 };
   } finally {
     clearTimeout(timeoutId);
   }
+}
 
-  const text = await resp.text();
+function isChapaSuccess(decoded) {
+  if (!decoded || typeof decoded !== "object") return false;
+  const topStatus = decoded.status ? String(decoded.status).toLowerCase() : "";
+  const dataStatus =
+    decoded.data && typeof decoded.data === "object" && decoded.data.status
+      ? String(decoded.data.status).toLowerCase()
+      : "";
+  return topStatus === "success" || dataStatus === "success";
+}
+
+function getVerifiedAmount(decoded) {
+  if (!decoded || typeof decoded !== "object") return null;
+  const candidate =
+    decoded.data && typeof decoded.data === "object" ? decoded.data.amount : null;
+  const n = Number(candidate);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function finalizeChapaTx({ txRef, verified, verifiedAmount }) {
+  const parsed = parseChapaTxRef(txRef);
+  const userId = parsed.userId;
+  if (!userId) {
+    console.warn("chapaFinalize: Unable to parse userId from txRef", { txRef });
+    return { ok: false, reason: "bad-txref" };
+  }
+
+  const db = admin.database();
+  const userRef = db.ref(`users/${userId}`);
+  const txDbRef = userRef.child(`transactions/${txRef}`);
+  const txSnap = await txDbRef.get();
+  if (!txSnap.exists()) {
+    console.warn("chapaFinalize: Transaction not found", { userId, txRef });
+    return { ok: false, reason: "tx-not-found" };
+  }
+
+  const tx = txSnap.val() || {};
+  const currentStatus = String(tx.status || "pending");
+  if (currentStatus === "success" || currentStatus === "failed") {
+    return { ok: true, already: true, status: currentStatus };
+  }
+
+  const toUserId = String(tx.toUserId || "");
+  const amount = Number(tx.amount || 0);
+  const effectiveAmount =
+    Number.isFinite(verifiedAmount) && verifiedAmount > 0 ? verifiedAmount : amount;
+  const fee = calculateFee(effectiveAmount);
+  const net = effectiveAmount - fee;
+  const points = calculatePoints(effectiveAmount);
+  const nowMs = admin.database.ServerValue.TIMESTAMP;
+
+  // Wallet top-up: credit wallet + points after verification.
+  if (toUserId === "wallet") {
+    const notificationId = userRef.child("notifications").push().key;
+    const ledgerId = userRef.child("points_ledger").push().key;
+
+    const result = await userRef.transaction((current) => {
+      if (!current || typeof current !== "object") return;
+
+      const transactions =
+        current.transactions && typeof current.transactions === "object"
+          ? current.transactions
+          : {};
+      const existing = transactions[txRef];
+      if (!existing || typeof existing !== "object") return;
+      if (String(existing.status || "pending") !== "pending") return current;
+
+      if (verified) {
+        current.walletBalance = Number(current.walletBalance || 0) + net;
+        current.points = Number(current.points || 0) + points;
+
+        existing.status = "success";
+        existing.verificationStatus = "success";
+        existing.verifiedAtMs = nowMs;
+        existing.feeAmount = fee;
+        existing.netAmount = net;
+      } else {
+        existing.status = "failed";
+        existing.verificationStatus = "failed";
+        existing.verifiedAtMs = nowMs;
+      }
+
+      transactions[txRef] = existing;
+      current.transactions = transactions;
+
+      if (verified && ledgerId && points > 0) {
+        const ledger =
+          current.points_ledger && typeof current.points_ledger === "object"
+            ? current.points_ledger
+            : {};
+        ledger[ledgerId] = {
+          delta: points,
+          action: "deposit",
+          createdAtMs: nowMs,
+          relatedTransactionId: txRef,
+          metadata: { amount: effectiveAmount, fee, net, gateway: "chapa" },
+        };
+        current.points_ledger = ledger;
+      }
+
+      if (notificationId) {
+        const notifications =
+          current.notifications && typeof current.notifications === "object"
+            ? current.notifications
+            : {};
+        notifications[notificationId] = {
+          id: notificationId,
+          userId,
+          title: verified ? "Deposit successful" : "Deposit failed",
+          body: verified
+            ? `Your wallet was credited (ETB ${net.toFixed(2)}).`
+            : "Your deposit could not be verified.",
+          type: verified ? "success" : "error",
+          isRead: false,
+          createdAt: new Date().toISOString(),
+          createdAtMs: nowMs,
+          metadata: { transactionId: txRef },
+        };
+        current.notifications = notifications;
+      }
+
+      return current;
+    });
+
+    if (!result.committed) {
+      console.warn("chapaFinalize: Wallet transaction not committed", { userId, txRef });
+      return { ok: false, reason: "not-committed" };
+    }
+
+    return { ok: true, status: verified ? "success" : "failed" };
+  }
+
+  // Group payment: apply to group ledger + rotation only after verification.
+  if (!toUserId) {
+    await txDbRef.update({
+      status: verified ? "success" : "failed",
+      verificationStatus: verified ? "success" : "failed",
+      verifiedAtMs: nowMs,
+    });
+    return { ok: true, status: verified ? "success" : "failed" };
+  }
+
+  if (!verified) {
+    await txDbRef.update({
+      status: "failed",
+      verificationStatus: "failed",
+      verifiedAtMs: nowMs,
+    });
+    return { ok: true, status: "failed" };
+  }
+
+  const groupId = toUserId;
+  const groupRef = db.ref(`groups/${groupId}`);
+
+  const groupResult = await groupRef.transaction((current) => {
+    if (!current || typeof current !== "object") return;
+
+    const members = Array.isArray(current.members) ? current.members.map(String) : [];
+    const contributionAmount = Number(current.contributionAmount || 0);
+
+    if (!current.rotationState || typeof current.rotationState !== "object") {
+      current.rotationState = {};
+    }
+    const rotationState = current.rotationState;
+
+    const progress = isPlainObject(rotationState.contributionProgress)
+      ? { ...rotationState.contributionProgress }
+      : {};
+    progress[userId] = Number(progress[userId] || 0) + effectiveAmount;
+    rotationState.contributionProgress = progress;
+
+    const payoutQueue = Array.isArray(rotationState.payoutQueue)
+      ? rotationState.payoutQueue.map(String)
+      : members.slice();
+    if (!payoutQueue.includes(userId) && members.includes(userId)) {
+      payoutQueue.push(userId);
+    }
+    rotationState.payoutQueue = payoutQueue;
+
+    const ledger = Array.isArray(current.ledger) ? current.ledger.slice() : [];
+
+    ledger.push({
+      id: txRef,
+      fromUserId: userId,
+      toUserId: groupId,
+      amount: effectiveAmount,
+      timestamp: new Date().toISOString(),
+      status: "success",
+      gateway: "chapa",
+      feeAmount: fee,
+      netAmount: net,
+      verificationStatus: "success",
+    });
+
+    const schedule =
+      current.scheduleConfig && typeof current.scheduleConfig === "object"
+        ? current.scheduleConfig
+        : {};
+    const autoAssign = schedule.autoAssign === true;
+    const cycleLengthDays = Number(schedule.cycleLengthDays || current.frequencyDays || 30);
+
+    const thresholdMet =
+      members.length > 0 &&
+      members.every((m) => Number(progress[m] || 0) + 1e-8 >= contributionAmount);
+
+    if (thresholdMet && autoAssign && members.length > 0) {
+      const currentRound = Number(rotationState.currentRound || 0);
+      const nextRound = currentRound + 1;
+      rotationState.currentRound = nextRound;
+
+      const recipient = payoutQueue.length ? payoutQueue[0] : members[0];
+      const payoutAmount = contributionAmount * members.length;
+      const processedAt = new Date().toISOString();
+      const scheduledFor = rotationState.nextPayoutDate || processedAt;
+
+      const history = Array.isArray(rotationState.history) ? rotationState.history.slice() : [];
+      history.push({
+        round: nextRound,
+        memberId: recipient,
+        amount: payoutAmount,
+        scheduledFor,
+        processedAt,
+        autoAssigned: true,
+        note: "Auto-assigned payout (server-verified contribution)",
+      });
+      rotationState.history = history;
+
+      // Subtract one cycle worth of contributions.
+      const adjusted = {};
+      for (const m of members) {
+        adjusted[m] = Math.max(Number(progress[m] || 0) - contributionAmount, 0);
+      }
+      rotationState.contributionProgress = adjusted;
+
+      // Rotate queue.
+      const nextQueue = payoutQueue.slice();
+      if (nextQueue.length && nextQueue[0] === recipient) {
+        nextQueue.shift();
+      } else {
+        const idx = nextQueue.indexOf(recipient);
+        if (idx >= 0) nextQueue.splice(idx, 1);
+      }
+      nextQueue.push(recipient);
+      // Ensure all members present.
+      for (const m of members) {
+        if (!nextQueue.includes(m)) nextQueue.push(m);
+      }
+      rotationState.payoutQueue = nextQueue;
+
+      // Advance next payout date beyond now.
+      const now = new Date();
+      let nextPayoutDate = new Date(rotationState.nextPayoutDate || now.toISOString());
+      while (!(nextPayoutDate > now)) {
+        nextPayoutDate = new Date(nextPayoutDate.getTime() + cycleLengthDays * 24 * 60 * 60 * 1000);
+      }
+      rotationState.nextPayoutDate = nextPayoutDate.toISOString();
+
+      // Also append a payout transaction to the group ledger.
+      ledger.push({
+        id: `payout-${groupId}-${nextRound}-${Date.now()}`,
+        fromUserId: groupId,
+        toUserId: recipient,
+        amount: payoutAmount,
+        timestamp: processedAt,
+        status: "success",
+        gateway: "equb_payout",
+        feeAmount: 0,
+        netAmount: payoutAmount,
+        verificationStatus: "success",
+      });
+    }
+
+    current.ledger = ledger;
+    current.rotationState = rotationState;
+    current.updatedAtMs = admin.database.ServerValue.TIMESTAMP;
+    return current;
+  });
+
+  if (!groupResult.committed) {
+    console.warn("chapaFinalize: Group update not committed", { groupId, userId, txRef });
+  }
+
+  // Award points to the payer for contribution.
+  try {
+    const ledgerId = userRef.child("points_ledger").push().key;
+    await userRef.transaction((current) => {
+      if (!current || typeof current !== "object") return;
+      current.points = Number(current.points || 0) + points;
+      if (ledgerId && points > 0) {
+        const ledger =
+          current.points_ledger && typeof current.points_ledger === "object"
+            ? current.points_ledger
+            : {};
+        ledger[ledgerId] = {
+          delta: points,
+          action: "contribute",
+          createdAtMs: nowMs,
+          relatedTransactionId: txRef,
+          metadata: { amount: effectiveAmount, groupId, gateway: "chapa" },
+        };
+        current.points_ledger = ledger;
+      }
+      return current;
+    });
+  } catch (e) {
+    console.warn("chapaFinalize: Failed to award points", { userId, txRef, error: String(e) });
+  }
+
+  await txDbRef.update({
+    status: "success",
+    verificationStatus: "success",
+    verifiedAtMs: nowMs,
+    feeAmount: fee,
+    netAmount: net,
+  });
+
+  return { ok: true, status: "success" };
+}
+
+exports.chapaVerifyAndFinalize = functions.https.onCall(async (data, context) => {
+  assertAuthed(context);
+  const txRef = (data && data.txRef ? String(data.txRef) : "").trim();
+  if (!txRef) {
+    throw new functions.https.HttpsError("invalid-argument", "txRef required");
+  }
+
+  const isEmulator =
+    String(process.env.FUNCTIONS_EMULATOR || "").toLowerCase() === "true";
+  const secretKey = await getChapaSecretKey({
+    isEmulator,
+    clientSecretKey: data && data.secretKey,
+  });
+
+  if (!secretKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      isEmulator
+        ? "Chapa secretKey not provided for emulator. Set CHAPA_SECRET_KEY env var."
+        : "Chapa secretKey not configured."
+    );
+  }
+
+  const { resp, decoded, endpoint } = await verifyChapaTransaction(secretKey, txRef);
   if (!resp.ok) {
-    throw new functions.https.HttpsError("internal", "FenanPay intent failed", {
+    console.error("Chapa verify failed", {
       endpoint,
       status: resp.status,
-      body: text,
+      txRef,
+      decoded: decoded ? redactSensitive(decoded) : undefined,
     });
+    throw new functions.https.HttpsError(
+      "unavailable",
+      `Chapa verify failed (${resp.status})`
+    );
   }
 
-  let decoded;
+  const verified = isChapaSuccess(decoded);
+  const verifiedAmount = getVerifiedAmount(decoded);
+  const result = await finalizeChapaTx({ txRef, verified, verifiedAmount });
+  return { ok: true, verified, result };
+});
+
+exports.chapaWebhook = functions.https.onRequest(async (req, res) => {
   try {
-    decoded = JSON.parse(text);
-  } catch (_) {
-    throw new functions.https.HttpsError(
-      "internal",
-      "FenanPay response was not valid JSON",
-      { endpoint, body: text }
-    );
-  }
+    const body = isPlainObject(req.body) ? req.body : safeJsonParse(req.rawBody?.toString("utf8")) || {};
+    const txRef =
+      (body && (body.tx_ref || body.txRef || body.reference))
+        ? String(body.tx_ref || body.txRef || body.reference).trim()
+        : (req.query && (req.query.tx_ref || req.query.txRef))
+          ? String(req.query.tx_ref || req.query.txRef).trim()
+          : "";
 
-  // Match the client extractor loosely.
-  let checkoutUrl = "";
-  if (decoded && typeof decoded === "object") {
-    const content = decoded.content;
-    if (typeof content === "string") checkoutUrl = content.trim();
-    if (!checkoutUrl && content && typeof content === "object") {
-      checkoutUrl = (
-        content.checkoutUrl ||
-        content.checkout_url ||
-        content.url ||
-        content.redirectUrl ||
-        content.redirect_url ||
-        ""
-      )
-        .toString()
-        .trim();
+    if (!txRef) {
+      return res.status(400).send({ ok: false, error: "tx_ref required" });
     }
-    if (!checkoutUrl) {
-      checkoutUrl = (
-        decoded.checkoutUrl ||
-        decoded.url ||
-        decoded.redirectUrl ||
-        ""
-      )
-        .toString()
-        .trim();
+
+    const isEmulator =
+      String(process.env.FUNCTIONS_EMULATOR || "").toLowerCase() === "true";
+    const secretKey = await getChapaSecretKey({ isEmulator });
+    if (!secretKey) {
+      return res.status(500).send({ ok: false, error: "Chapa secretKey not configured" });
     }
-  }
 
-  if (!checkoutUrl) {
-    throw new functions.https.HttpsError(
-      "internal",
-      "FenanPay response missing checkout URL",
-      { endpoint, decoded }
-    );
-  }
+    const { resp, decoded } = await verifyChapaTransaction(secretKey, txRef);
+    if (!resp.ok) {
+      console.error("Chapa verify failed (webhook)", {
+        status: resp.status,
+        txRef,
+        decoded: decoded ? redactSensitive(decoded) : undefined,
+      });
+      return res.status(503).send({ ok: false, error: "verify failed" });
+    }
 
-  return { ok: true, checkoutUrl };
+    const verified = isChapaSuccess(decoded);
+    const verifiedAmount = getVerifiedAmount(decoded);
+    const result = await finalizeChapaTx({ txRef, verified, verifiedAmount });
+    return res.status(200).send({ ok: true, verified, result });
+  } catch (e) {
+    console.error("Chapa webhook error", { error: String(e) });
+    return res.status(500).send({ ok: false, error: "internal" });
+  }
 });
 
 // --- Advanced Admin Functions ---

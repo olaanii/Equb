@@ -22,7 +22,7 @@ class TransactionModel {
     required this.amount,
     DateTime? timestamp,
     this.status = TransactionStatus.pending,
-    this.gateway = 'simulated',
+    this.gateway = 'unknown',
     this.feeAmount = 0.0,
     double? netAmount,
     this.screenshotUrl,
@@ -42,7 +42,7 @@ class TransactionModel {
         (e) => e.toString().split('.').last == json['status'],
         orElse: () => TransactionStatus.pending,
       ),
-      gateway: json['gateway'] as String? ?? 'simulated',
+      gateway: json['gateway'] as String? ?? 'unknown',
       feeAmount: (json['feeAmount'] as num?)?.toDouble() ?? 0.0,
       netAmount:
           (json['netAmount'] as num?)?.toDouble() ??

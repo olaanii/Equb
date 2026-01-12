@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import 'config/portal_feature_flags_panel.dart';
 import 'config/portal_gateways_panel.dart';
+import 'config/portal_api_keys_panel.dart';
+import 'config/portal_chapa_test_panel.dart';
 import 'config/portal_rules_panel.dart';
 
 class PortalConfigController {
@@ -12,6 +14,8 @@ class PortalConfigController {
   void openFeatureFlags() => section.value = 1;
   void openGateways() => section.value = 2;
   void openRules() => section.value = 3;
+  void openApiKeys() => section.value = 4;
+  void openChapaTest() => section.value = 5;
 
   void dispose() => section.dispose();
 }
@@ -73,13 +77,39 @@ class _PortalConfigPageState extends State<PortalConfigPage> {
     final theme = Theme.of(context);
 
     if (_section == 1) {
-      return _ConfigFrame(title: 'Feature flags', onBack: _back, child: const PortalFeatureFlagsPanel());
+      return _ConfigFrame(
+        title: 'Feature flags',
+        onBack: _back,
+        child: const PortalFeatureFlagsPanel(),
+      );
     }
     if (_section == 2) {
-      return _ConfigFrame(title: 'Gateways', onBack: _back, child: const PortalGatewaysPanel());
+      return _ConfigFrame(
+        title: 'Gateways',
+        onBack: _back,
+        child: const PortalGatewaysPanel(),
+      );
     }
     if (_section == 3) {
-      return _ConfigFrame(title: 'Rules', onBack: _back, child: const PortalRulesPanel());
+      return _ConfigFrame(
+        title: 'Rules',
+        onBack: _back,
+        child: const PortalRulesPanel(),
+      );
+    }
+    if (_section == 4) {
+      return _ConfigFrame(
+        title: 'API keys',
+        onBack: _back,
+        child: const PortalApiKeysPanel(),
+      );
+    }
+    if (_section == 5) {
+      return _ConfigFrame(
+        title: 'Chapa test',
+        onBack: _back,
+        child: const PortalChapaTestPanel(),
+      );
     }
 
     return SingleChildScrollView(
@@ -122,6 +152,20 @@ class _PortalConfigPageState extends State<PortalConfigPage> {
                 icon: Icons.rule_folder_outlined,
                 onTap: () => _open(3),
               ),
+              const SizedBox(height: 12),
+              _LinkCard(
+                title: 'API keys',
+                subtitle: 'Manage external API access tokens.',
+                icon: Icons.key_outlined,
+                onTap: () => _open(4),
+              ),
+              const SizedBox(height: 12),
+              _LinkCard(
+                title: 'Chapa test',
+                subtitle: 'Configure Chapa test keys and test users.',
+                icon: Icons.payments_outlined,
+                onTap: () => _open(5),
+              ),
             ],
           ),
         ),
@@ -131,7 +175,11 @@ class _PortalConfigPageState extends State<PortalConfigPage> {
 }
 
 class _ConfigFrame extends StatelessWidget {
-  const _ConfigFrame({required this.title, required this.onBack, required this.child});
+  const _ConfigFrame({
+    required this.title,
+    required this.onBack,
+    required this.child,
+  });
 
   final String title;
   final VoidCallback onBack;

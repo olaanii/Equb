@@ -17,16 +17,45 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
   final TextEditingController _amountController = TextEditingController();
   int _method = 1;
   bool _submitting = false;
+  double? _amount;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountController.addListener(_recomputeSummary);
+    _recomputeSummary();
+  }
+
+  void _recomputeSummary() {
+    final raw = _amountController.text.trim();
+    final parsed = double.tryParse(raw);
+    if (!mounted) return;
+    setState(() {
+      _amount = parsed;
+    });
+  }
 
   @override
   void dispose() {
+    _amountController.removeListener(_recomputeSummary);
     _amountController.dispose();
     super.dispose();
+  }
+
+  String _formatEtb(double value) => 'ETB ${value.toStringAsFixed(2)}';
+
+  double _estimateFees(double amount) {
+    // Chapa fees are not modeled in-app.
+    return 0;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final amount =
+        (_amount != null && _amount!.isFinite && _amount! > 0) ? _amount! : 0.0;
+    final fee = _estimateFees(amount);
+    final net = (amount - fee).clamp(0, double.infinity).toDouble();
     return ProdScaffold(
       title: 'Deposit',
       child: ListView(
@@ -65,7 +94,7 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 RadioListTile<int>(
-                  title: const Text('FenanPay (Test)'),
+                  title: const Text('Chapa (Test)'),
                   subtitle: Text(
                     'Hosted checkout (sandbox)',
                     style: theme.textTheme.bodySmall,
@@ -88,7 +117,8 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                _SummaryRow(label: 'Fees', value: 'ETB 0.00'),
+                _SummaryRow(label: 'Fees', value: _formatEtb(fee)),
+                _SummaryRow(label: 'Net credited', value: _formatEtb(net)),
                 _SummaryRow(label: 'ETA', value: 'Instant'),
                 _SummaryRow(label: 'Destination', value: 'Wallet credit'),
               ],
@@ -118,7 +148,8 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
       return;
     }
 
-    final uid = ref.read(currentUserProvider).value?.id;
+    final user = ref.read(currentUserProvider).value;
+    final uid = user?.id;
     if (uid == null || uid.isEmpty) {
       messenger.showSnackBar(
         const SnackBar(content: Text('Sign in required.')),
@@ -126,13 +157,23 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
       return;
     }
 
+    final phone = (user?.phone ?? '').trim();
+    if (phone.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Add your phone number in Profile and try again.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _submitting = true);
     try {
       final gatewayService = ref.read(gatewayServiceProvider);
-      final paymentService = await gatewayService.getAdapter('fenanpay');
+      final paymentService = await gatewayService.getAdapter('chapa');
       if (paymentService == null) {
         messenger.showSnackBar(
-          const SnackBar(content: Text('FenanPay gateway is not configured.')),
+          const SnackBar(content: Text('Chapa gateway is not configured.')),
         );
         return;
       }
@@ -141,9 +182,10 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
 
       await paymentService.createPayment(
         fromUserId: uid,
-        toUserId: uid,
+        toUserId: 'wallet',
         amount: amount,
-        gateway: 'fenanpay',
+        gateway: 'chapa',
+        customerPhone: phone.isNotEmpty ? phone : null,
         context: context,
       );
 
@@ -155,7 +197,7 @@ class _DepositScreenState extends ConsumerState<DepositScreen> {
       );
     } on GatewayCredentialException catch (err) {
       messenger.showSnackBar(
-        SnackBar(content: Text('FenanPay API key missing: ${err.message}')),
+        SnackBar(content: Text('Chapa key missing: ${err.message}')),
       );
     } catch (err) {
       messenger.showSnackBar(SnackBar(content: Text('Deposit error: $err')));

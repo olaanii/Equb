@@ -78,19 +78,38 @@ class GroupDetailScreen extends ConsumerWidget {
           children: [
             Expanded(
               child: PrimaryButton(
-                text: 'Pay with FenanPay',
+                text: 'Pay with Chapa',
                 icon: Icons.payment,
                 onPressed: () async {
                   final messenger = ScaffoldMessenger.of(context);
                   try {
+                    if (user?.id == null || user!.id.trim().isEmpty) {
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('Sign in required.')),
+                      );
+                      return;
+                    }
+
+                    final phone = (user.phone ?? '').trim();
+                    if (phone.isEmpty) {
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Add your phone number in Profile and try again.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
                     final gatewayService = ref.read(gatewayServiceProvider);
                     final paymentService = await gatewayService.getAdapter(
-                      'fenanpay',
+                      'chapa',
                     );
                     if (paymentService == null) {
                       messenger.showSnackBar(
                         const SnackBar(
-                          content: Text('FenanPay gateway is not configured.'),
+                          content: Text('Chapa gateway is not configured.'),
                         ),
                       );
                       return;
@@ -99,10 +118,11 @@ class GroupDetailScreen extends ConsumerWidget {
                     if (!context.mounted) return;
 
                     final tx = await paymentService.createPayment(
-                      fromUserId: user?.id ?? 'demo_user',
+                      fromUserId: user!.id,
                       toUserId: group.id,
                       amount: group.contribution.toDouble(),
-                      gateway: 'fenanpay',
+                      gateway: 'chapa',
+                      customerPhone: phone,
                       context: context,
                     );
 
@@ -135,7 +155,7 @@ class GroupDetailScreen extends ConsumerWidget {
                     messenger.showSnackBar(
                       SnackBar(
                         content: Text(
-                          'FenanPay credentials missing: ${err.message}',
+                          'Chapa credentials missing: ${err.message}',
                         ),
                         action: SnackBarAction(
                           label: 'View runbook',

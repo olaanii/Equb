@@ -5,7 +5,7 @@ import 'package:equb/domain/gateway_feature_flag.dart';
 import 'package:equb/services/payment_service.dart';
 import 'package:equb/services/adapters/telebirr_impl.dart';
 import 'package:equb/services/adapters/cbe_impl.dart';
-import 'package:equb/services/adapters/fenanpay_impl.dart';
+import 'package:equb/services/adapters/chapa_impl.dart';
 import 'package:equb/services/secure_storage_service.dart';
 import 'package:equb/services/system_log_service.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -120,20 +120,16 @@ class GatewayService {
 
   final List<PaymentGatewayConfig> _configs = [
     PaymentGatewayConfig(
-      id: 'fenanpay',
-      name: 'FenanPay',
+      id: 'chapa',
+      name: 'Chapa',
       enabled: true,
       environment: 'sandbox',
       meta: const {
         'environment': 'sandbox',
-        'baseUrl': 'https://api.fenanpay.com/api/v1/payment/sandbox/intent',
-        'returnUrl': 'https://fenanpay.com',
-        'expireIn': 3600,
-        'commissionPaidByCustomer': false,
-        // If empty array is passed, all enabled methods are selected.
-        'methods': <String>[],
-        'notes':
-            'Hosted checkout test integration (Payment Intent -> checkout URL).',
+        'baseUrl': 'https://api.chapa.co/v1/transaction/initialize',
+        'returnUrl': 'https://chapa.co',
+        'currency': 'ETB',
+        'notes': 'Chapa test integration (initialize -> checkout_url).',
       },
     ),
     PaymentGatewayConfig(
@@ -247,18 +243,39 @@ class GatewayService {
     for (final r in remote) {
       final existing = byId[r.id];
       if (existing == null) {
-        byId[r.id] = r;
+        byId[r.id] =
+            r.id == 'chapa'
+                ? PaymentGatewayConfig(
+                  id: r.id,
+                  name: r.name,
+                  enabled: r.enabled,
+                  environment: r.environment,
+                  meta: _normalizeChapaMeta(r.meta),
+                )
+                : r;
         continue;
       }
+
+      final mergedMeta = (r.meta.isNotEmpty ? r.meta : existing.meta);
       byId[r.id] = PaymentGatewayConfig(
         id: existing.id,
         name: r.name.isNotEmpty ? r.name : existing.name,
         enabled: r.enabled,
         environment: r.environment,
-        meta: r.meta.isNotEmpty ? r.meta : existing.meta,
+        meta: r.id == 'chapa' ? _normalizeChapaMeta(mergedMeta) : mergedMeta,
       );
     }
     return byId.values.toList(growable: false);
+  }
+
+  Map<String, dynamic> _normalizeChapaMeta(Map<String, dynamic> meta) {
+    if (meta.isEmpty) return meta;
+    final out = Map<String, dynamic>.from(meta);
+    out['environment'] ??= 'sandbox';
+    out['baseUrl'] ??= 'https://api.chapa.co/v1/transaction/initialize';
+    out['returnUrl'] ??= 'https://chapa.co';
+    out['currency'] ??= 'ETB';
+    return out;
   }
 
   // Used to pick the right credentials for gateways that distinguish
@@ -279,31 +296,39 @@ class GatewayService {
     );
     if (!g.enabled) return null;
     final meta = g.meta;
-    if (gatewayId == 'fenanpay') {
+    if (gatewayId == 'chapa') {
       final base = meta['baseUrl'] as String?;
-      final apiKey = _resolveFenanPayApiKey(meta, operation: operation);
+      final secretKey = (meta['secretKey'] as String?)?.trim() ?? '';
+      final publicKey = (meta['publicKey'] as String?)?.trim() ?? '';
+      if (secretKey.isEmpty && publicKey.isEmpty) {
+        final message =
+            'Missing credentials for $gatewayId gateway. Add a Chapa publicKey and/or secretKey via SecureStorage.';
+        _logService?.log(
+          LogLevel.error,
+          'GatewayService.$gatewayId',
+          message,
+          context: {'gatewayId': gatewayId, 'field': 'publicKey/secretKey'},
+        );
+        throw GatewayCredentialException(
+          message: message,
+          gatewayId: gatewayId,
+          field: 'publicKey/secretKey',
+        );
+      }
       final returnUrl = meta['returnUrl'] as String?;
       final callbackUrl = meta['callbackUrl'] as String?;
-      final expireIn = meta['expireIn'] as int?;
-      final commissionPaidByCustomer =
-          meta['commissionPaidByCustomer'] as bool?;
-      final methodsRaw = meta['methods'];
-      final methods =
-          (methodsRaw is List)
-              ? methodsRaw
-                  .map((e) => e.toString())
-                  .where((e) => e.isNotEmpty)
-                  .toList()
-              : const <String>[];
+      final currency = meta['currency'] as String?;
 
-      return FenanPayImpl(
-        apiKey: apiKey,
-        intentEndpoint: base,
+      return ChapaImpl(
+        secretKey: secretKey,
+        publicKey: publicKey,
+        initializeEndpoint: base,
         returnUrl: returnUrl,
         callbackUrl: callbackUrl,
-        expireInSeconds: expireIn ?? 3600,
-        commissionPaidByCustomer: commissionPaidByCustomer ?? false,
-        methods: methods,
+        currency:
+            (currency != null && currency.trim().isNotEmpty)
+                ? currency.trim()
+                : 'ETB',
       );
     }
     if (gatewayId == 'telebirr') {
@@ -387,23 +412,7 @@ class GatewayService {
     return value;
   }
 
-  String _resolveFenanPayApiKey(
-    Map<String, dynamic> meta, {
-    required GatewayOperation operation,
-  }) {
-    // Allow distinct keys for deposit vs withdrawal while keeping backwards
-    // compatibility with a single `apiKey` value.
-    final primaryField =
-        (operation == GatewayOperation.withdrawal)
-            ? 'withdrawalApiKey'
-            : 'depositApiKey';
-
-    final primary = (meta[primaryField] as String?)?.trim() ?? '';
-    if (primary.isNotEmpty) return primary;
-
-    // Back-compat / default.
-    return _requireCredential(meta, 'apiKey', 'fenanpay');
-  }
+  // NOTE: Chapa only needs a single secret key for initialization.
 }
 
 class GatewayCredentialException implements Exception {
@@ -459,23 +468,23 @@ List<PaymentGatewayConfig> _injectSecrets(
   }
   return configs
       .map((config) {
-        if (config.id == 'fenanpay') {
+        if (config.id == 'chapa') {
           final mergedMeta = Map<String, dynamic>.from(config.meta);
-          // Prefer new split-key configuration.
-          if (secrets.fenanPayDepositKey != null &&
-              secrets.fenanPayDepositKey!.trim().isNotEmpty) {
-            mergedMeta['depositApiKey'] = secrets.fenanPayDepositKey;
-            // Keep existing callers working by also setting `apiKey`.
-            mergedMeta['apiKey'] = secrets.fenanPayDepositKey;
+          if (secrets.chapaPublicKey != null &&
+              secrets.chapaPublicKey!.trim().isNotEmpty) {
+            mergedMeta['publicKey'] = secrets.chapaPublicKey;
           }
-          if (secrets.fenanPayWithdrawalKey != null &&
-              secrets.fenanPayWithdrawalKey!.trim().isNotEmpty) {
-            mergedMeta['withdrawalApiKey'] = secrets.fenanPayWithdrawalKey;
+          if (secrets.chapaSecretKey != null &&
+              secrets.chapaSecretKey!.trim().isNotEmpty) {
+            mergedMeta['secretKey'] = secrets.chapaSecretKey;
           }
-          // Backwards compatible single key.
-          if (secrets.fenanPayApiKey != null &&
-              secrets.fenanPayApiKey!.trim().isNotEmpty) {
-            mergedMeta['apiKey'] = secrets.fenanPayApiKey;
+          if (secrets.chapaCallbackUrl != null &&
+              secrets.chapaCallbackUrl!.trim().isNotEmpty) {
+            mergedMeta['callbackUrl'] = secrets.chapaCallbackUrl;
+          }
+          if (secrets.chapaReturnUrl != null &&
+              secrets.chapaReturnUrl!.trim().isNotEmpty) {
+            mergedMeta['returnUrl'] = secrets.chapaReturnUrl;
           }
           return config.copyWith(meta: mergedMeta);
         }

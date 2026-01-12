@@ -161,14 +161,14 @@ class ProfileScreen extends ConsumerWidget {
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: scheme.outlineVariant.withOpacity(0.55),
-        ),
-        boxShadow: [BoxShadow(
-          color: scheme.shadow.withOpacity(0.10),
-          blurRadius: 16,
-          offset: const Offset(0, 8),
-        )],
+        border: Border.all(color: scheme.outlineVariant.withOpacity(0.55)),
+        boxShadow: [
+          BoxShadow(
+            color: scheme.shadow.withOpacity(0.10),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -293,7 +293,7 @@ class ProfileScreen extends ConsumerWidget {
                   size: 18,
                   color: AppColors.primary,
                 ),
-                onPressed: () => _showEditProfileDialog(context, user),
+                onPressed: () => _showEditProfileDialog(context, ref, user),
                 tooltip: 'Edit Profile',
               ),
             ],
@@ -310,7 +310,12 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  void _showEditProfileDialog(BuildContext context, UserModel user) {
+  void _showEditProfileDialog(
+    BuildContext context,
+    WidgetRef ref,
+    UserModel user,
+  ) {
+    final rootContext = context;
     final nameController = TextEditingController(text: user.name);
     final phoneController = TextEditingController(text: user.phone);
     bool isSaving = false;
@@ -372,72 +377,83 @@ class ProfileScreen extends ConsumerWidget {
                     ],
                   ],
                 ),
-                actions:
-                    isSaving
-                        ? []
-                        : [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text(
-                              'Cancel',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ),
-                          Consumer(
-                            builder: (context, ref, _) {
-                              return TextButton(
-                                onPressed: () async {
-                                  final newName = nameController.text.trim();
-                                  final newPhone = phoneController.text.trim();
+                actions: [
+                  TextButton(
+                    onPressed:
+                        isSaving
+                            ? null
+                            : () => Navigator.of(dialogContext).pop(),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed:
+                        isSaving
+                            ? null
+                            : () async {
+                              final newName = nameController.text.trim();
+                              final newPhone = phoneController.text.trim();
 
-                                  if (newName.isEmpty) {
-                                    ToastService.error(
-                                      context,
-                                      'Name cannot be empty',
-                                    );
-                                    return;
-                                  }
+                              if (newName.isEmpty) {
+                                ToastService.error(
+                                  rootContext,
+                                  'Name cannot be empty',
+                                );
+                                return;
+                              }
 
-                                  setState(() => isSaving = true);
+                              setState(() => isSaving = true);
 
-                                  final updatedUser = user.copyWith(
-                                    name: newName,
-                                    phone: newPhone.isEmpty ? null : newPhone,
-                                  );
-
-                                  try {
-                                    await ref
-                                        .read(userRepositoryProvider)
-                                        .updateUser(updatedUser);
-
-                                    // Force refresh of the user provider to reflect changes
-                                    ref.invalidate(currentUserProvider);
-
-                                    if (context.mounted) {
-                                      Navigator.pop(context);
-                                      ToastService.success(
-                                        context,
-                                        'Profile updated successfully',
-                                      );
-                                    }
-                                  } catch (e) {
-                                    if (context.mounted) {
-                                      setState(() => isSaving = false);
-                                      ToastService.error(
-                                        context,
-                                        'Update failed: $e',
-                                      );
-                                    }
-                                  }
-                                },
-                                child: const Text(
-                                  'Save',
-                                  style: TextStyle(color: AppColors.primary),
-                                ),
+                              final updatedUser = user.copyWith(
+                                name: newName,
+                                phone: newPhone.isEmpty ? null : newPhone,
                               );
+
+                              // Read dependencies before awaiting so we don't
+                              // touch a deactivated widget ref later.
+                              final userRepo = ref.read(userRepositoryProvider);
+                              final sessionCache = ref.read(
+                                sessionCacheServiceProvider,
+                              );
+
+                              try {
+                                await userRepo.updateUser(updatedUser);
+
+                                await sessionCache.cacheUser(updatedUser);
+
+                                if (rootContext.mounted) {
+                                  ref.invalidate(currentUserProvider);
+                                }
+
+                                // No need to invalidate: currentUserProvider is a
+                                // RTDB stream of users/$uid and will emit updates.
+                                if (!dialogContext.mounted) return;
+                                Navigator.of(dialogContext).pop();
+                                if (rootContext.mounted) {
+                                  ToastService.success(
+                                    rootContext,
+                                    'Profile updated successfully',
+                                  );
+                                }
+                              } catch (e) {
+                                if (!dialogContext.mounted) return;
+                                setState(() => isSaving = false);
+                                if (rootContext.mounted) {
+                                  ToastService.error(
+                                    rootContext,
+                                    'Update failed: $e',
+                                  );
+                                }
+                              }
                             },
-                          ),
-                        ],
+                    child: const Text(
+                      'Save',
+                      style: TextStyle(color: AppColors.primary),
+                    ),
+                  ),
+                ],
               );
             },
           ),
@@ -500,7 +516,9 @@ class ProfileScreen extends ConsumerWidget {
           title: 'Email Preferences',
           onTap:
               () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const EmailPreferencesScreen()),
+                MaterialPageRoute(
+                  builder: (_) => const EmailPreferencesScreen(),
+                ),
               ),
         ),
         const SizedBox(height: 12),

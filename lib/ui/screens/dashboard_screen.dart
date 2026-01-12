@@ -9,11 +9,14 @@ import 'package:equb/ui/screens/gateways_screen.dart';
 import 'package:equb/ui/screens/group_chat_screen.dart';
 import 'package:equb/ui/screens/super_admin_screen.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
+import 'package:equb/ui/screens/wallet/deposit_screen.dart';
+import 'package:equb/ui/utils/app_snackbar.dart';
 import 'package:equb/ui/widgets/common.dart';
 import 'package:equb/ui/widgets/group_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:equb/services/equb_repository.dart';
+import 'package:equb/providers/wallet_providers.dart';
 // import 'package:fl_chart/fl_chart.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -97,9 +100,12 @@ class DashboardScreen extends ConsumerWidget {
   }
 
   void _showGroupDialog(BuildContext context, WidgetRef ref) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final actingUserId =
-        ref.read(firebaseAuthUserProvider).asData?.value?.uid ?? 'u_demo';
+    final user = ref.read(currentUserProvider).value;
+    final actingUserId = user?.id;
+    if (actingUserId == null) {
+      AppSnackbar.showError('Please sign in to create a group.');
+      return;
+    }
     final created = await showDialog<EqubGroup?>(
       context: context,
       builder: (_) => const GroupDialog(),
@@ -113,13 +119,9 @@ class DashboardScreen extends ConsumerWidget {
         // FirestoreEqubRepository uses doc().id if id is empty.
         await equbRepo.createGroup(created, actingUserId: actingUserId);
         ref.invalidate(equbGroupsProvider); // Refresh list
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Group created successfully')),
-        );
+        AppSnackbar.showInfo('Group created successfully');
       } catch (e) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('Failed to create group: $e')),
-        );
+        AppSnackbar.showError('Failed to create group: $e');
       }
     }
   }
@@ -180,40 +182,10 @@ class _WalletSummaryCardState extends ConsumerState<_WalletSummaryCard> {
   bool _isHidden = false;
   bool _isCollapsed = false;
 
-  Future<void> _handleContribution(BuildContext context) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final equbRepo = ref.read(equbRepositoryProvider);
-    final user = ref.read(currentUserProvider).value;
-    final actingUserId = user?.id ?? 'u_demo';
-
-    try {
-      final groups = await equbRepo.listGroups();
-      if (!context.mounted) return;
-      if (groups.isEmpty) {
-        await equbRepo.createGroup(
-          EqubGroup(id: 'g_demo', name: 'Demo Equb', contributionAmount: 100.0),
-        );
-      }
-      if (!context.mounted) return;
-      final tx = await equbRepo.contribute(
-        groupId: 'g_demo',
-        userId: actingUserId,
-        context: context,
-      );
-      if (!context.mounted) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text('Contributed ${tx.amount} via ${tx.gateway}')),
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Contribution failed: $e')),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final summaryAsync = ref.watch(walletSummaryProvider);
     final labelStyle = theme.textTheme.labelSmall?.copyWith(
       color: AppColors.textSecondary,
       fontSize: 11,
@@ -228,7 +200,12 @@ class _WalletSummaryCardState extends ConsumerState<_WalletSummaryCard> {
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
-    final amountText = _isHidden ? 'ETB ****' : 'ETB 3420.50';
+    final amountText = _isHidden
+      ? 'ETB ****'
+      : summaryAsync.maybeWhen(
+        data: (summary) => 'ETB ${summary.available.toStringAsFixed(2)}',
+        orElse: () => 'ETB —',
+        );
     final toggleVisibilityTooltip =
         _isHidden ? 'Show savings balance' : 'Hide savings balance';
     final collapseTooltip =
@@ -288,9 +265,15 @@ class _WalletSummaryCardState extends ConsumerState<_WalletSummaryCard> {
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(minHeight: 32),
                     child: ElevatedButton.icon(
-                      onPressed: () => _handleContribution(context),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const DepositScreen(),
+                          ),
+                        );
+                      },
                       icon: const Icon(Icons.add_circle_outline, size: 16),
-                      label: Text('Contribute now', style: buttonTextStyle),
+                      label: Text('Top up', style: buttonTextStyle),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,

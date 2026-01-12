@@ -165,6 +165,7 @@ class EqubService {
       toUserId: groupId,
       amount: group.contributionAmount,
       gateway: 'simulated',
+      customerPhone: null,
       context: context,
     );
 

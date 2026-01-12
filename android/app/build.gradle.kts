@@ -1,11 +1,26 @@
 plugins {
     id("com.android.application")
-    // START: FlutterFire Configuration
-    id("com.google.gms.google-services")
-    // END: FlutterFire Configuration
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// FlutterFire Configuration (optional)
+// Many setups require google-services.json, but this project also initializes Firebase
+// via Dart options (see lib/firebase_options.dart). To allow building APKs in environments
+// where google-services.json isn't checked in, apply the plugin only when the file exists.
+val hasGoogleServicesJson =
+    file("google-services.json").exists() ||
+        file("src/google-services.json").exists() ||
+        file("src/debug/google-services.json").exists()
+
+if (hasGoogleServicesJson) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    logger.warn(
+        "google-services.json not found; skipping com.google.gms.google-services plugin. " +
+            "Firebase must be initialized via explicit options at runtime."
+    )
 }
 
 android {

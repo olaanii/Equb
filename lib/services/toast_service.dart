@@ -1,5 +1,6 @@
 import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 
 enum ToastType { success, error, warning, info }
 
@@ -10,11 +11,18 @@ class ToastService {
     ToastType type = ToastType.info,
     Duration duration = const Duration(seconds: 3),
   }) {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    if (!context.mounted) return;
 
-    // Clear previous snackbars immediately
-    scaffoldMessenger.removeCurrentSnackBar();
+    void present() {
+      if (!context.mounted) return;
+
+      final scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+      if (scaffoldMessenger == null) return;
+
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+
+      // Clear previous snackbars immediately
+      scaffoldMessenger.removeCurrentSnackBar();
 
     Color backgroundColor;
     IconData icon;
@@ -48,32 +56,46 @@ class ToastService {
         break;
     }
 
-    scaffoldMessenger.showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(icon, color: iconColor, size: 24),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(
-                  color: textColor,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(icon, color: iconColor, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
+          backgroundColor: backgroundColor,
+          behavior: SnackBarBehavior.floating,
+          duration: duration,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          margin: const EdgeInsets.all(16),
+          elevation: 6,
         ),
-        backgroundColor: backgroundColor,
-        behavior: SnackBarBehavior.floating,
-        duration: duration,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-        elevation: 6,
-      ),
-    );
+      );
+    }
+
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    final isSafeNow =
+        phase == SchedulerPhase.idle || phase == SchedulerPhase.postFrameCallbacks;
+
+    if (isSafeNow) {
+      present();
+      return;
+    }
+
+    SchedulerBinding.instance.addPostFrameCallback((_) => present());
   }
 
   static void success(BuildContext context, String message) =>

@@ -64,6 +64,15 @@ class AppTheme {
       scaffoldBackgroundColor: scheme.background,
       fontFamily: AppTextStyles.fontFamily,
       textTheme: textTheme,
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        elevation: 0,
+        backgroundColor: scheme.surface,
+        contentTextStyle: textTheme.bodyMedium,
+        actionTextColor: scheme.primary,
+        shape: RoundedRectangleBorder(borderRadius: AppRadiuses.small),
+        insetPadding: AppSpacing.pagePaddingMobile,
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.background,
         elevation: 0,

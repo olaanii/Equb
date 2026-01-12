@@ -195,6 +195,14 @@ class FirestoreEqubRepository implements EqubRepository {
       () async {
         final isManual = screenshotUrl != null;
 
+        if (!isManual) {
+          throw RepositoryException(
+            code: 'payment-required',
+            message:
+                'Automatic contributions are disabled. Please complete payment via Chapa checkout, or upload a screenshot for manual verification.',
+          );
+        }
+
         return _firestore.runTransaction((transaction) async {
           final docRef = _groupsRef.doc(groupId);
           final snapshot = await transaction.get(docRef);
@@ -228,36 +236,16 @@ class FirestoreEqubRepository implements EqubRepository {
             fromUserId: userId,
             toUserId: 'pool-$groupId',
             amount: amount,
-            status:
-                isManual
-                    ? TransactionStatus.pending
-                    : TransactionStatus.success,
-            gateway: isManual ? 'manual-screenshot' : 'telebirr',
+            status: TransactionStatus.pending,
+            gateway: 'manual-screenshot',
             feeAmount: fee,
             netAmount: net,
             screenshotUrl: screenshotUrl,
           );
 
-          if (!isManual) {
-            // Apply contribution only if not manual (until verified)
-            final currentProgress =
-                group.rotationState.contributionProgress[userId] ?? 0.0;
-            final newProgress = currentProgress + amount;
-            final newContributionProgress = Map<String, double>.from(
-              group.rotationState.contributionProgress,
-            );
-            newContributionProgress[userId] = newProgress;
-
-            final newRotationState = group.rotationState.copyWith(
-              contributionProgress: newContributionProgress,
-            );
-
-            // Update user points
-            final currentPoints = (userDoc.data()?['points'] as int?) ?? 0;
-            transaction.update(userRef, {'points': currentPoints + points});
-
-            final updatedGroup = group.copyWith(
-              ledger: [...group.ledger, tx],
+          // Manual contributions are pending until reviewed/verified.
+          final updatedGroup = group.copyWith(
+            ledger: [...group.ledger, tx],
               rotationState: newRotationState,
             );
             transaction.update(docRef, updatedGroup.toJson());

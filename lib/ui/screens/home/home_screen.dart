@@ -1,7 +1,10 @@
 import 'package:equb/providers/providers.dart';
 import 'package:equb/models/equb_model.dart';
+import 'package:equb/models/transaction_model.dart';
 import 'package:equb/models/user_model.dart';
 import 'package:equb/providers/app_providers.dart';
+import 'package:equb/providers/transaction_providers.dart';
+import 'package:equb/providers/wallet_providers.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,29 +15,22 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
-    final user = ref.watch(currentUserProvider).asData?.value;
+    final userAsync = ref.watch(currentUserProvider);
+    final user = userAsync.asData?.value;
     final groupsAsync = ref.watch(equbGroupsProvider);
 
-    final recent = const <_HomeTransactionItem>[
-      _HomeTransactionItem(
-        title: 'Transfer to Jason',
-        subtitle: 'Today',
-        amount: '- 120.00',
-        isPositive: false,
-      ),
-      _HomeTransactionItem(
-        title: 'Salary',
-        subtitle: 'Yesterday',
-        amount: '+ 2,500.00',
-        isPositive: true,
-      ),
-      _HomeTransactionItem(
-        title: 'Top up',
-        subtitle: 'Yesterday',
-        amount: '+ 200.00',
-        isPositive: true,
-      ),
-    ];
+    final walletSummaryAsync = ref.watch(walletSummaryProvider);
+    final transactionsAsync = ref.watch(transactionHistoryProvider);
+
+    final balanceText = walletSummaryAsync.maybeWhen(
+      data: (summary) => summary.available.toStringAsFixed(2),
+      orElse: () => '—',
+    );
+
+    final pointsText = userAsync.maybeWhen(
+      data: (u) => u == null ? '—' : u.points.toString(),
+      orElse: () => '—',
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -81,8 +77,9 @@ class HomeScreen extends ConsumerWidget {
         children: [
           _BalanceCard(
             name: user?.name ?? 'User',
-            balance: '1,459.70',
-            points: (user?.points ?? 0).toString(),
+            balance: balanceText,
+            points: pointsText,
+            accountLabel: _maskedPhone(user?.phone),
           ),
           const SizedBox(height: 16),
           _MyEqubsSection(groupsAsync: groupsAsync, user: user),
@@ -118,15 +115,106 @@ class HomeScreen extends ConsumerWidget {
                 'Recent transaction',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              TextButton(onPressed: () {}, child: const Text('Show more')),
+              TextButton(
+                onPressed: () {
+                  ref.read(selectedTabIndexProvider.notifier).state = 1;
+                },
+                child: const Text('Show more'),
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          ...recent.map((t) => _TransactionTile(item: t)),
+          transactionsAsync.when(
+            loading:
+                () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+            error:
+                (err, _) => Text(
+                  'Failed to load transactions: $err',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: scheme.error),
+                ),
+            data: (txs) {
+              final uid = user?.id;
+              if (uid == null) {
+                return Text(
+                  'Sign in to see your transactions.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurface.withOpacity(0.7),
+                  ),
+                );
+              }
+
+                final chapa =
+                  txs
+                      .where(
+                        (t) =>
+                      t.gateway.toLowerCase() == 'chapa' &&
+                            (t.status == TransactionStatus.success ||
+                                t.verificationStatus ==
+                                    TransactionStatus.success),
+                      )
+                      .toList(growable: false)
+                    ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+              final recent =
+                  chapa.take(3).map((t) {
+                    final isDeposit =
+                        t.fromUserId == uid && t.toUserId == 'wallet';
+                    final isWithdraw =
+                        t.fromUserId == 'wallet' && t.toUserId == uid;
+                    final title =
+                        isDeposit
+                            ? 'Top up'
+                            : (isWithdraw ? 'Withdraw' : 'Transaction');
+                    final sign = isDeposit ? '+' : (isWithdraw ? '-' : '');
+                    return _HomeTransactionItem(
+                      title: title,
+                      subtitle: _formatShortDate(t.timestamp),
+                      amount: '$sign ${t.amount.toStringAsFixed(2)}',
+                      isPositive: isDeposit,
+                    );
+                  }).toList(growable: false);
+
+              if (recent.isEmpty) {
+                return Text(
+                  'No Chapa transactions yet.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurface.withOpacity(0.7),
+                  ),
+                );
+              }
+
+              return Column(
+                children: [
+                  for (final t in recent) _TransactionTile(item: t),
+                ],
+              );
+            },
+          ),
           const SizedBox(height: 24),
         ],
       ),
     );
+  }
+
+  static String _formatShortDate(DateTime date) {
+    final local = date.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year;
+    return '$day/$month/$year';
+  }
+
+  static String _maskedPhone(String? phone) {
+    final value = phone?.trim();
+    if (value == null || value.isEmpty) return '—';
+    if (value.length <= 4) return value;
+    final tail = value.substring(value.length - 4);
+    return '•••• •••• $tail';
   }
 }
 
@@ -135,11 +223,13 @@ class _BalanceCard extends StatelessWidget {
     required this.name,
     required this.balance,
     required this.points,
+    required this.accountLabel,
   });
 
   final String name;
   final String balance;
   final String points;
+  final String accountLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -184,7 +274,7 @@ class _BalanceCard extends StatelessWidget {
                 Expanded(
                   child: _InfoPair(
                     label: 'NeoPay number',
-                    value: '•••• •••• 5324',
+                    value: accountLabel,
                   ),
                 ),
                 const SizedBox(width: 12),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:equb/ui/auth_wrapper.dart';
 import 'package:equb/ui/home_shell.dart';
 import 'package:equb/ui/routes/admin_route.dart';
@@ -15,9 +17,21 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:equb/providers/app_providers.dart';
+import 'package:equb/providers/providers.dart';
+import 'package:equb/ui/utils/app_snackbar.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    AppSnackbar.showError(details.exceptionAsString());
+  };
+
+  WidgetsBinding.instance.platformDispatcher.onError = (error, stack) {
+    AppSnackbar.showError(error.toString());
+    return true;
+  };
 
   if (!kReleaseMode) {
     await _bootstrapGatewaySecretsFromDartDefines();
@@ -72,7 +86,7 @@ void main() async {
   });
   runApp(
     ProviderScope(
-      child: EqubApp(
+      child: EqubLifecycleGate(
         firebaseInitialized: firebaseInitialized,
         firebaseError: firebaseError,
       ),
@@ -83,31 +97,40 @@ void main() async {
 Future<void> _bootstrapGatewaySecretsFromDartDefines() async {
   // Optional dev helper: pass keys at runtime so the wallet app can run
   // even if secure storage isn't shared between different dev-server ports.
-  const depositKey = String.fromEnvironment('FENANPAY_DEPOSIT_KEY');
-  const withdrawalKey = String.fromEnvironment('FENANPAY_WITHDRAWAL_KEY');
+  const chapaPublicKey = String.fromEnvironment('CHAPA_PUBLIC_KEY');
+  const chapaSecretKey = String.fromEnvironment('CHAPA_SECRET_KEY');
+  const chapaCallbackUrl = String.fromEnvironment('CHAPA_CALLBACK_URL');
+  const chapaReturnUrl = String.fromEnvironment('CHAPA_RETURN_URL');
 
   final storage = SecureStorageService();
 
-  final hasDeposit = depositKey.trim().isNotEmpty;
-  final hasWithdrawal = withdrawalKey.trim().isNotEmpty;
-  if (!hasDeposit && !hasWithdrawal) return;
+  final hasChapaPublic = chapaPublicKey.trim().isNotEmpty;
+  final hasChapaSecret = chapaSecretKey.trim().isNotEmpty;
+  final hasCallbackUrl = chapaCallbackUrl.trim().isNotEmpty;
+  final hasReturnUrl = chapaReturnUrl.trim().isNotEmpty;
+  if (!hasChapaPublic && !hasChapaSecret && !hasCallbackUrl && !hasReturnUrl) {
+    return;
+  }
 
   try {
-    if (hasDeposit) {
-      await storage.write('gateway.fenanpay.depositKey', depositKey.trim());
-      // Back-compat for older logic.
-      await storage.write('gateway.fenanpay.apiKey', depositKey.trim());
-      debugPrint('Stored FenanPay deposit key in secure storage.');
+    if (hasChapaPublic) {
+      await storage.write('gateway.chapa.publicKey', chapaPublicKey.trim());
     }
-    if (hasWithdrawal) {
+    if (hasChapaSecret) {
+      await storage.write('gateway.chapa.secretKey', chapaSecretKey.trim());
+    }
+    if (hasCallbackUrl) {
       await storage.write(
-        'gateway.fenanpay.withdrawalKey',
-        withdrawalKey.trim(),
+        'gateway.chapa.callbackUrl',
+        chapaCallbackUrl.trim(),
       );
-      debugPrint('Stored FenanPay withdrawal key in secure storage.');
     }
+    if (hasReturnUrl) {
+      await storage.write('gateway.chapa.returnUrl', chapaReturnUrl.trim());
+    }
+    debugPrint('Stored Chapa keys in secure storage.');
   } catch (e) {
-    debugPrint('Failed to store FenanPay keys in secure storage: $e');
+    debugPrint('Failed to store Chapa key in secure storage: $e');
   }
 }
 
@@ -181,6 +204,7 @@ class EqubApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Equb - Modern Savings',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: AppSnackbar.messengerKey,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
@@ -220,6 +244,72 @@ class EqubApp extends ConsumerWidget {
         }
         return MaterialPageRoute(builder: (_) => page, settings: settings);
       },
+    );
+  }
+}
+
+class EqubLifecycleGate extends ConsumerStatefulWidget {
+  final bool firebaseInitialized;
+  final String? firebaseError;
+
+  const EqubLifecycleGate({
+    super.key,
+    required this.firebaseInitialized,
+    required this.firebaseError,
+  });
+
+  @override
+  ConsumerState<EqubLifecycleGate> createState() => _EqubLifecycleGateState();
+}
+
+class _EqubLifecycleGateState extends ConsumerState<EqubLifecycleGate>
+    with WidgetsBindingObserver {
+  DateTime? _lastResumeAttemptAt;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_recoverPendingPayments());
+    }
+  }
+
+  Future<void> _recoverPendingPayments() async {
+    if (!mounted) return;
+    if (!widget.firebaseInitialized) return;
+
+    final now = DateTime.now();
+    final last = _lastResumeAttemptAt;
+    if (last != null && now.difference(last) < const Duration(seconds: 8)) {
+      return;
+    }
+    _lastResumeAttemptAt = now;
+
+    final user = ref.read(currentUserProvider).value;
+    if (user == null) return;
+
+    await ref
+        .read(paymentRecoveryServiceProvider)
+        .recoverLatestPendingChapaTx(userId: user.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return EqubApp(
+      firebaseInitialized: widget.firebaseInitialized,
+      firebaseError: widget.firebaseError,
     );
   }
 }

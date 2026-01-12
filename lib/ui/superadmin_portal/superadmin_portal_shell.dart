@@ -32,27 +32,6 @@ class _SuperAdminPortalShellState extends State<SuperAdminPortalShell> {
   @override
   void initState() {
     super.initState();
-
-    // UI-first: seed a couple of demo notifications so the system is visible.
-    _notificationService.addNotification(
-      PortalNotification(
-        id: 'n1',
-        title: 'Wallet backlog elevated',
-        body: 'Processing latency increased (demo).',
-        type: PortalNotificationType.warning,
-        timestamp: DateTime.now().subtract(const Duration(minutes: 8)),
-      ),
-    );
-    _notificationService.addNotification(
-      PortalNotification(
-        id: 'n2',
-        title: 'Deploy completed',
-        body: 'Database rules updated successfully (demo).',
-        type: PortalNotificationType.success,
-        timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-        read: true,
-      ),
-    );
   }
 
   @override

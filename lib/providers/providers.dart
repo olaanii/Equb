@@ -25,6 +25,7 @@ import 'package:equb/services/notification_reminder_service.dart';
 import 'package:equb/services/notification_service.dart';
 import 'package:equb/services/onboarding_service.dart';
 import 'package:equb/services/payment_service.dart';
+import 'package:equb/services/payment_recovery_service.dart';
 import 'package:equb/services/points_repository.dart';
 import 'package:equb/services/push_notification_scheduler.dart';
 import 'package:equb/services/rtdb_equb_repository.dart';
@@ -56,6 +57,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final secureStorageServiceProvider = Provider<SecureStorageService>((ref) {
   return SecureStorageService();
+});
+
+final paymentRecoveryServiceProvider = Provider<PaymentRecoveryService>((ref) {
+  return PaymentRecoveryService(
+    database: FirebaseDatabase.instance,
+    functions: FirebaseFunctions.instance,
+    secureStorage: ref.watch(secureStorageServiceProvider),
+    logService: ref.watch(systemLogServiceProvider),
+  );
 });
 
 final systemLogServiceProvider = Provider<SystemLogService>(
@@ -106,6 +116,15 @@ final currentUserProvider = StreamProvider<UserModel?>((ref) {
             if (role != 'superAdmin') {
               await userRef.update({'role': 'superAdmin'});
             }
+
+            final authEmail = (firebaseUser.email ?? '').trim();
+            final existingEmail = (existing['email'] ?? '').toString().trim();
+            if (authEmail.isNotEmpty && authEmail != existingEmail) {
+              await userRef.update({
+                'email': authEmail,
+                'emailNormalized': authEmail.toLowerCase(),
+              });
+            }
           }
           return;
         }
@@ -124,6 +143,10 @@ final currentUserProvider = StreamProvider<UserModel?>((ref) {
           role: kDebugMode ? UserRole.superAdmin : UserRole.user,
         );
         await userRef.set(seed.toJson());
+
+        if (email.isNotEmpty) {
+          await userRef.update({'emailNormalized': email.toLowerCase()});
+        }
       } catch (err) {
         logService.log(
           LogLevel.warning,
@@ -225,33 +248,9 @@ final gatewayServiceProvider = Provider<GatewayService>((ref) {
 });
 
 final equbStoreProvider = Provider<EqubStore>((ref) {
-  final uid = FirebaseAuth.instance.currentUser?.uid ?? 'member-001';
-  final members = <String>[uid, 'member-002', 'member-003', 'member-004'];
-
-  final rotationEngine = EqubRotationEngine();
-  final schedule = EqubScheduleConfig(
-    cycleLengthDays: 7,
-    strategy: PayoutStrategy.random,
-    autoAssign: false,
-    preferredOrder: members,
-  );
-  final state = rotationEngine.bootstrapState(
-    config: schedule,
-    members: members,
-  );
-
-  final seed = <EqubGroup>[
-    EqubGroup(
-      id: 'equb-001',
-      name: 'Addis Friends Equb',
-      contributionAmount: 500,
-      scheduleConfig: schedule,
-      members: members,
-      rotationState: state,
-    ),
-  ];
-
-  return EqubStore(seed: seed);
+  // No mock/demo seed data. When Firebase is not initialized (tests/dev),
+  // the in-memory store remains empty so the UI does not display fake groups.
+  return EqubStore();
 });
 
 final Provider<EqubRotationEngine> equbRotationEngineProvider =
@@ -301,74 +300,6 @@ final equbGroupsProvider = StreamProvider<List<EqubGroup>>((ref) {
     try {
       await for (final event in groupsRef.onValue) {
         final raw = event.snapshot.value;
-
-        // Debug-only: auto-seed a single demo group for the signed-in user
-        // when the database is empty. This helps validate RTDB wiring quickly.
-        if (kDebugMode && (raw == null || raw is! Map)) {
-          final uid = authUser.uid;
-          if (uid.isNotEmpty) {
-            bool demoSeedEnabled = false;
-            try {
-              final flag =
-                  await FirebaseDatabase.instance
-                      .ref('config/feature_flags/demoSeedEnabled')
-                      .get();
-              demoSeedEnabled = flag.value == true;
-            } catch (_) {
-              // If the flag cannot be read (permissions/offline), do not seed.
-              demoSeedEnabled = false;
-            }
-
-            if (!demoSeedEnabled) {
-              if (raw == null || raw is! Map) {
-                yield <EqubGroup>[];
-                continue;
-              }
-            }
-
-            final seededFlag = FirebaseDatabase.instance.ref(
-              'users/$uid/debug/demoSeeded',
-            );
-
-            try {
-              final already = await seededFlag.get();
-              final isSeeded = already.value == true;
-              if (!isSeeded) {
-                final repo = ref.read(equbRepositoryProvider);
-                final engine = ref.read(equbRotationEngineProvider);
-                final members = <String>[uid];
-                final schedule = EqubScheduleConfig(
-                  cycleLengthDays: 7,
-                  strategy: PayoutStrategy.random,
-                  autoAssign: false,
-                  preferredOrder: members,
-                );
-                final state = engine.bootstrapState(
-                  config: schedule,
-                  members: members,
-                );
-
-                final group = EqubGroup(
-                  id: '',
-                  name: 'Demo Equb',
-                  contributionAmount: 100,
-                  scheduleConfig: schedule,
-                  members: members,
-                  rotationState: state,
-                );
-                await repo.createGroup(group, actingUserId: uid);
-                await seededFlag.set(true);
-              }
-            } catch (err) {
-              logService.log(
-                LogLevel.warning,
-                'providers.equbGroupsProvider',
-                'Demo seed failed (non-fatal)',
-                context: {'error': '$err'},
-              );
-            }
-          }
-        }
 
         if (raw == null || raw is! Map) {
           yield <EqubGroup>[];

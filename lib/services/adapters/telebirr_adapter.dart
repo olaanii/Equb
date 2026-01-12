@@ -12,6 +12,7 @@ class TelebirrAdapter implements PaymentService {
     required String toUserId,
     required double amount,
     required String gateway,
+    String? customerPhone,
     required BuildContext context,
   }) async {
     await Future.delayed(const Duration(seconds: 1));

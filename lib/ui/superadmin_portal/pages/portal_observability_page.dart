@@ -26,24 +26,7 @@ class _PortalObservabilityPageState extends State<PortalObservabilityPage>
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    final demoAudit = <PortalAuditEvent>[
-      PortalAuditEvent(
-        at: DateTime.now().subtract(const Duration(minutes: 3)),
-        actor: 'superadmin',
-        action: 'Opened',
-        target: 'Observability',
-        meta: const {'source': 'portal'},
-        icon: Icons.monitor_heart_outlined,
-      ),
-      PortalAuditEvent(
-        at: DateTime.now().subtract(const Duration(minutes: 1)),
-        actor: 'superadmin',
-        action: 'Viewed',
-        target: 'Audit timeline',
-        meta: const {'mode': 'ui-only'},
-        icon: Icons.history_outlined,
-      ),
-    ];
+    const auditEvents = <PortalAuditEvent>[];
 
     return Padding(
       padding: context.pagePadding,
@@ -137,7 +120,21 @@ class _PortalObservabilityPageState extends State<PortalObservabilityPage>
                                 style: theme.textTheme.bodyMedium,
                               ),
                               const SizedBox(height: 12),
-                              PortalAuditTimeline(events: demoAudit),
+                              if (auditEvents.isEmpty)
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: scheme.surfaceVariant,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    'No audit events yet.',
+                                    style: theme.textTheme.bodySmall,
+                                  ),
+                                )
+                              else
+                                PortalAuditTimeline(events: auditEvents),
                             ],
                           ),
                         ),

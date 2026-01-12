@@ -167,7 +167,7 @@ class _AdvancedAdminDashboardState extends ConsumerState<AdvancedAdminDashboard>
             _MetricCard(
               title: 'Transactions',
               value: _formatNumber(stats.totalTransactions),
-              subtitle: 'total processed',
+              subtitle: 'Successful',
               icon: Icons.swap_horiz,
               color: Colors.purple,
             ),

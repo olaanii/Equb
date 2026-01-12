@@ -247,7 +247,8 @@
 
         "transactions": {
           "$txId": {
-            ".write": "auth != null && auth.uid === $uid && (!data.exists() || (data.child('requiresReview').val() === true ? (newData.child('status').val() === data.child('status').val()) : true))"
+            ".write": "auth != null && auth.uid === $uid && !data.exists() && newData.child('id').val() === $txId && newData.child('fromUserId').val() === auth.uid && newData.child('status').val() === 'pending' && newData.child('verificationStatus').val() === 'pending' && newData.child('amount').isNumber() && newData.child('amount').val() > 0",
+            ".validate": "newData.hasChildren(['id','fromUserId','toUserId','amount','status','gateway'])"
           },
           ".indexOn": ["timestampMs"]
         },

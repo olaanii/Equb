@@ -192,8 +192,7 @@ class _GatewayPanel extends StatelessWidget {
               icon: const Icon(Icons.output_outlined),
               label: const Text('Export reconciliation CSV'),
               onPressed: () {
-                const out =
-                    '# Reconciliation CSV (local demo)\nGroup ID,Name,Total\ng_demo,Demo Equb,0.00';
+                const out = '# Reconciliation CSV\nGroup ID,Name,Total';
                 showDialog(
                   context: context,
                   builder:

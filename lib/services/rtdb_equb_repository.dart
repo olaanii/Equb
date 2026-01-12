@@ -390,6 +390,14 @@ class RtdbEqubRepository implements EqubRepository {
         );
       }
 
+      if (screenshotUrl == null) {
+        throw RepositoryException(
+          code: 'payment-required',
+          message:
+              'Automatic contributions are disabled. Please complete payment via Chapa checkout, or upload a screenshot for manual verification.',
+        );
+      }
+
       final tx = TransactionModel(
         id: DateTime.now().microsecondsSinceEpoch.toString(),
         fromUserId: userId,
@@ -397,7 +405,7 @@ class RtdbEqubRepository implements EqubRepository {
         amount: group.contributionAmount,
         timestamp: DateTime.now(),
         status: TransactionStatus.success,
-        gateway: screenshotUrl == null ? 'simulated' : 'manual-screenshot',
+        gateway: 'manual-screenshot',
         screenshotUrl: screenshotUrl,
       );
 

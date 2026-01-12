@@ -5,6 +5,7 @@ import 'package:equb/services/equb_repository.dart';
 import 'package:equb/services/id_document_repository.dart';
 import 'package:equb/services/system_log_service.dart';
 import 'package:equb/services/user_repository.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class AdvancedAdminService {
   AdvancedAdminService({
@@ -194,23 +195,98 @@ class AdvancedAdminService {
   }
 
   Future<AdminDashboardStats> _calculateBasicStats() async {
-    // Simplified calculation - would normally get from database
+    // Minimal, DB-derived fallback stats (no mock/demo numbers).
     final groups = await equbRepository.listGroups();
     final pendingDocs = await idDocumentRepository.getPendingDocuments();
 
+    final memberIds = <String>{
+      for (final g in groups) ...g.members,
+    };
+
+    var totalUsers = 0;
+    var activeUsers = 0;
+    var successfulTransactions = 0;
+
+    try {
+      final usersSnap = await FirebaseDatabase.instance.ref('users').get();
+      final usersRaw = usersSnap.value;
+      if (usersRaw is Map) {
+        for (final entry in usersRaw.entries) {
+          final userId = entry.key.toString();
+          final value = entry.value;
+          if (value is! Map) continue;
+
+          totalUsers++;
+          var isActive = memberIds.contains(userId);
+
+          final data = Map<String, dynamic>.from(value);
+          final walletBalance = (data['walletBalance'] as num?)?.toDouble() ?? 0;
+          final points = (data['points'] as int?) ?? 0;
+          if (walletBalance > 0 || points > 0) {
+            isActive = true;
+          }
+
+          final txRaw = data['transactions'];
+          if (txRaw is Map && txRaw.isNotEmpty) {
+            isActive = true;
+            for (final txEntry in txRaw.entries) {
+              final txValue = txEntry.value;
+              if (txValue is! Map) continue;
+              final tx = Map<String, dynamic>.from(txValue);
+
+              final status = (tx['status']?.toString() ?? '').toLowerCase();
+              final verificationStatus =
+                  (tx['verificationStatus']?.toString() ?? '').toLowerCase();
+              final isSuccess =
+                  status == 'success' || verificationStatus == 'success';
+              if (isSuccess) {
+                successfulTransactions++;
+              }
+            }
+          }
+
+          if (isActive) {
+            activeUsers++;
+          }
+        }
+      }
+    } catch (e) {
+      // Keep fallback usable even if admin doesn't have permission to read
+      // the full users tree; report via logs and return partial stats.
+      logService.log(
+        LogLevel.warning,
+        'admin.basic_stats',
+        'Failed to read users tree for dashboard fallback stats',
+        context: {'error': e.toString()},
+      );
+    }
+
+    final recentAlerts = <String>[];
+    if (pendingDocs.isNotEmpty) {
+      recentAlerts.add('${pendingDocs.length} pending verifications');
+    }
+    if (groups.isEmpty) {
+      recentAlerts.add('No groups created yet');
+    }
+    if (successfulTransactions == 0) {
+      recentAlerts.add('No successful transactions recorded yet');
+    }
+
+    // A simple availability signal (not a fabricated KPI): higher when there
+    // are fewer pending items relative to user count.
+    final denom = (totalUsers + pendingDocs.length).clamp(1, 1 << 30);
+    final systemHealth =
+        (1.0 - (pendingDocs.length / denom)).clamp(0.0, 1.0);
+
     return AdminDashboardStats(
-      totalUsers: 1000, // Would calculate from database
-      activeUsers: 750, // Would calculate from database
+      totalUsers: totalUsers,
+      activeUsers: activeUsers,
       totalGroups: groups.length,
       activeGroups: groups.where((g) => g.members.length >= 3).length,
-      totalTransactions: 5000, // Would calculate from database
+      totalTransactions: successfulTransactions,
       pendingVerifications: pendingDocs.length,
-      systemHealth: 0.98,
-      recentAlerts: [
-        'High transaction volume detected',
-        'New user registrations increased 15%',
-        'System backup completed successfully',
-      ],
+      systemHealth: systemHealth,
+      recentAlerts: recentAlerts,
       generatedAt: DateTime.now(),
     );
   }

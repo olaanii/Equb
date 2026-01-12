@@ -656,32 +656,50 @@ class _ThisRoundSummaryCard extends ConsumerWidget {
             return;
           }
 
-          final repo = ref.read(equbRepositoryProvider);
+          final phone = (user.phone ?? '').trim();
+          if (phone.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Add your phone number in Profile and try again.'),
+              ),
+            );
+            return;
+          }
+
           try {
-            await repo.contribute(
-              groupId: equb.id,
-              userId: user.id,
+            final gatewayService = ref.read(gatewayServiceProvider);
+            final paymentService = await gatewayService.getAdapter('chapa');
+            if (paymentService == null) {
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Chapa gateway is not configured.')),
+              );
+              return;
+            }
+
+            if (!context.mounted) return;
+
+            await paymentService.createPayment(
+              fromUserId: user.id,
+              toUserId: equb.id,
+              amount: requiredAmount,
+              gateway: 'chapa',
+              customerPhone: phone,
               context: context,
             );
+
             if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'Contribution recorded: ETB ${requiredAmount.toStringAsFixed(0)}',
-                ),
+              const SnackBar(
+                content: Text('Checkout opened. Awaiting confirmation.'),
               ),
             );
           } catch (e) {
             if (!context.mounted) return;
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text('Failed to contribute: $e')));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed to start payment: $e')),
+            );
           }
-
-          ref.invalidate(equbRepositoryProvider);
-          ref.invalidate(equbGroupProvider(equb.id));
-          ref.invalidate(equbGroupMetricsProvider(equb.id));
-          ref.invalidate(equbRoundSummariesProvider(equb.id));
         }
 
         return InfoCard(

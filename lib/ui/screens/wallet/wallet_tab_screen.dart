@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:equb/models/equb_model.dart';
+import 'package:equb/models/transaction_model.dart';
 import 'package:equb/models/user_model.dart';
 import 'package:equb/providers/providers.dart';
+import 'package:equb/providers/transaction_providers.dart';
+import 'package:equb/providers/wallet_providers.dart';
 import 'package:equb/ui/screens/wallet/deposit_screen.dart';
 
 class WalletTabScreen extends ConsumerStatefulWidget {
@@ -17,18 +20,13 @@ class WalletTabScreen extends ConsumerStatefulWidget {
 class _WalletTabScreenState extends ConsumerState<WalletTabScreen> {
   int _segment = 0;
 
-  final _tx = const <_WalletTxItem>[
-    _WalletTxItem(title: 'Top up', date: 'Mar 18, 2024', amount: '+ 200.00'),
-    _WalletTxItem(title: 'Transfer', date: 'Mar 18, 2024', amount: '- 120.00'),
-    _WalletTxItem(title: 'Fee', date: 'Mar 17, 2024', amount: '- 2.50'),
-    _WalletTxItem(title: 'Refund', date: 'Mar 16, 2024', amount: '+ 25.00'),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final groupsAsync = ref.watch(equbGroupsProvider);
     final user = ref.watch(currentUserProvider).value;
+    final summaryAsync = ref.watch(walletSummaryProvider);
+    final transactionsAsync = ref.watch(transactionHistoryProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -57,11 +55,34 @@ class _WalletTabScreenState extends ConsumerState<WalletTabScreen> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  Text(
-                    'ETB 1,459.70',
-                    style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                    ),
+                  summaryAsync.when(
+                    loading:
+                        () => Text(
+                          'ETB —',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.displayMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                    error:
+                        (_, __) => Text(
+                          'ETB —',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.displayMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                    data:
+                        (summary) => Text(
+                          'ETB ${summary.available.toStringAsFixed(2)}',
+                          style: Theme.of(
+                            context,
+                          ).textTheme.displayMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                   ),
                   const SizedBox(height: 14),
                   Row(
@@ -106,7 +127,59 @@ class _WalletTabScreenState extends ConsumerState<WalletTabScreen> {
           if (_segment == 0) ...[
             _EqubWalletOverview(groupsAsync: groupsAsync, user: user),
           ] else ...[
-            ..._tx.map((t) => _WalletTxTile(item: t)),
+            transactionsAsync.when(
+              loading:
+                  () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+              error:
+                  (err, _) => Text(
+                    'Failed to load transactions: $err',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.error,
+                    ),
+                  ),
+              data: (txs) {
+                final uid = user?.id;
+                if (uid == null) {
+                  return Text(
+                    'Sign in to see your transactions.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurface.withOpacity(0.7),
+                    ),
+                  );
+                }
+
+                final chapa =
+                    txs
+                        .where(
+                          (t) =>
+                              t.gateway.toLowerCase() == 'chapa' &&
+                              (t.status == TransactionStatus.success ||
+                                  t.verificationStatus ==
+                                      TransactionStatus.success),
+                        )
+                        .toList(growable: false)
+                      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+                if (chapa.isEmpty) {
+                  return Text(
+                    'No Chapa transactions yet.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurface.withOpacity(0.7),
+                    ),
+                  );
+                }
+
+                return Column(
+                  children: [
+                    for (final t in chapa.take(20))
+                      _WalletTxTile(transaction: t, currentUserId: uid),
+                  ],
+                );
+              },
+            ),
           ],
           const SizedBox(height: 24),
         ],
@@ -245,32 +318,32 @@ class _WalletOverviewCard extends StatelessWidget {
   }
 }
 
-class _WalletTxItem {
-  const _WalletTxItem({
-    required this.title,
-    required this.date,
-    required this.amount,
-  });
-
-  final String title;
-  final String date;
-  final String amount;
-}
-
 class _WalletTxTile extends StatelessWidget {
-  const _WalletTxTile({required this.item});
+  const _WalletTxTile({required this.transaction, required this.currentUserId});
 
-  final _WalletTxItem item;
+  final TransactionModel transaction;
+  final String currentUserId;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final isPositive = item.amount.trimLeft().startsWith('+');
-    final lowerTitle = item.title.toLowerCase();
-    final tag =
-        lowerTitle.contains('equb')
-            ? 'Equb'
-            : (lowerTitle.contains('payout') ? 'Equb Payout' : null);
+
+    final isDeposit =
+      transaction.fromUserId == currentUserId &&
+      transaction.toUserId == 'wallet';
+    final isWithdraw =
+      transaction.fromUserId == 'wallet' &&
+      transaction.toUserId == currentUserId;
+    final isPositive = isDeposit;
+
+    final title =
+      isDeposit
+        ? 'Top up'
+        : (isWithdraw ? 'Withdraw' : 'Transaction');
+    final sign = isDeposit ? '+' : (isWithdraw ? '-' : '');
+    final amountText = '$sign ${transaction.amount.toStringAsFixed(2)}';
+    final subtitle =
+      '${_formatShortDate(transaction.timestamp)} • ${transaction.gateway}';
 
     return Card(
       child: ListTile(
@@ -281,10 +354,10 @@ class _WalletTxTile extends StatelessWidget {
             color: scheme.onSurface.withOpacity(0.7),
           ),
         ),
-        title: Text(item.title),
-        subtitle: Text(tag == null ? item.date : '${item.date} • $tag'),
+        title: Text(title),
+        subtitle: Text(subtitle),
         trailing: Text(
-          item.amount,
+          amountText,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             fontWeight: FontWeight.w800,
             color: isPositive ? AppColors.success : scheme.onSurface,
@@ -292,5 +365,13 @@ class _WalletTxTile extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static String _formatShortDate(DateTime date) {
+    final local = date.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year;
+    return '$day/$month/$year';
   }
 }
