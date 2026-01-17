@@ -17,13 +17,24 @@ class CustomBottomNavBar extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final isDark = scheme.brightness == Brightness.dark;
 
+    final containerColor =
+        isDark ? scheme.surfaceContainerHighest : scheme.secondary;
+    final borderColor =
+        isDark ? scheme.outlineVariant.withOpacity(0.55) : Colors.transparent;
+    final selectedPillColor = isDark ? scheme.primary : Colors.white;
+    final selectedForeground = isDark ? scheme.onPrimary : Colors.black;
+    final unselectedIconColor =
+        isDark
+            ? scheme.onSurfaceVariant.withOpacity(0.75)
+            : Colors.white.withOpacity(0.78);
+
     return Container(
-      margin: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      margin: const EdgeInsets.fromLTRB(47, 0, 47, 22),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
+        color: containerColor,
         borderRadius: BorderRadius.circular(100),
-        border: Border.all(color: scheme.outlineVariant.withOpacity(0.55)),
+        border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
             color: scheme.shadow.withOpacity(isDark ? 0.4 : 0.12),
@@ -45,17 +56,18 @@ class CustomBottomNavBar extends StatelessWidget {
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
               padding: EdgeInsets.symmetric(
-                horizontal: isSelected ? 20 : 12,
-                vertical: 10,
+                horizontal: isSelected ? 16 : 10,
+                vertical: 8,
               ),
               decoration: BoxDecoration(
-                color: isSelected ? scheme.primary : Colors.transparent,
+                color: isSelected ? selectedPillColor : Colors.transparent,
                 borderRadius: BorderRadius.circular(100),
                 boxShadow:
                     isSelected
                         ? [
                           BoxShadow(
-                            color: scheme.primary.withOpacity(0.3),
+                            color: (isDark ? scheme.primary : Colors.black)
+                                .withOpacity(isDark ? 0.3 : 0.18),
                             blurRadius: 12,
                             spreadRadius: 2,
                           ),
@@ -68,19 +80,17 @@ class CustomBottomNavBar extends StatelessWidget {
                   Icon(
                     isSelected ? item.selectedIcon : item.icon,
                     color:
-                        isSelected
-                            ? scheme.onPrimary
-                            : scheme.onSurfaceVariant.withOpacity(0.75),
-                    size: 24,
+                        isSelected ? selectedForeground : unselectedIconColor,
+                    size: 22,
                   ),
                   if (isSelected) ...[
                     const SizedBox(width: 8),
                     Text(
                       item.label,
                       style: TextStyle(
-                        color: scheme.onPrimary,
+                        color: selectedForeground,
                         fontWeight: FontWeight.bold,
-                        fontSize: 14,
+                        fontSize: 13,
                       ),
                     ),
                   ],

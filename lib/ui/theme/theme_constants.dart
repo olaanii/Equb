@@ -4,7 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 /// Brand palette inspired by modern green fintech dashboards.
 class AppColors {
   // Neopay-style lime accent.
-  static const Color primary = Color(0xFFC7FF1A);
+  // Design: Lime Burst (#C3FF4E)
+  static const Color primary = Color(0xFFC3FF4E);
   static const Color primaryDark = Color(0xFF0B0F0C);
   static const Color primaryLight = Color(0xFFD9FF6B);
 
@@ -53,7 +54,7 @@ class AppSpacing {
   static const double gutter = 24;
 
   static const EdgeInsets pagePaddingMobile = EdgeInsets.symmetric(
-    horizontal: 20,
+    horizontal: 11,
     vertical: 16,
   );
   static const EdgeInsets pagePaddingTablet = EdgeInsets.symmetric(
@@ -93,9 +94,7 @@ class AppTextStyles {
     fontWeight: FontWeight.w500,
   );
 
-  static final TextStyle bodyText2 = GoogleFonts.manrope(
-    fontSize: 14,
-  );
+  static final TextStyle bodyText2 = GoogleFonts.manrope(fontSize: 14);
 
   static final TextStyle label = GoogleFonts.manrope(
     fontSize: 12,

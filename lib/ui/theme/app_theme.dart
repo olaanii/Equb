@@ -32,14 +32,15 @@ class AppTheme {
       onSecondary: Colors.white,
       error: AppColors.error,
       onError: Colors.white,
-      background: Color(0xFFF3F5F7),
+      // Design: Misty Gray (#E2EBED)
+      background: Color(0xFFE2EBED),
       onBackground: Color(0xFF0F172A),
       surface: Color(0xFFFFFFFF),
       onSurface: Color(0xFF0F172A),
       tertiary: AppColors.accent,
       onTertiary: Colors.white,
-      surfaceVariant: Color(0xFFF0F2F4),
-      outline: Color(0xFFE3E7EA),
+      surfaceVariant: Color(0xFFE2EBED),
+      outline: Color(0xFFD2DADD),
     );
     return _baseTheme(scheme: scheme, isDark: false);
   }
@@ -107,9 +108,22 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: scheme.secondary,
-          foregroundColor: scheme.onSecondary,
+          backgroundColor: isDark ? scheme.secondary : scheme.primary,
+          foregroundColor: isDark ? scheme.onSecondary : scheme.onPrimary,
           textStyle: AppTextStyles.button,
+          shape: RoundedRectangleBorder(borderRadius: AppRadiuses.small),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: scheme.onSurface,
+          backgroundColor: isDark ? Colors.transparent : scheme.surfaceVariant,
+          side:
+              isDark
+                  ? BorderSide(color: scheme.outline.withOpacity(0.55))
+                  : BorderSide.none,
+          textStyle: AppTextStyles.button,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: AppRadiuses.small),
         ),
       ),
@@ -158,18 +172,32 @@ class AppTheme {
         labelStyle: AppTextStyles.label,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: scheme.surface,
-        indicatorColor: scheme.primary.withOpacity(0.16),
+        backgroundColor: isDark ? scheme.surface : scheme.secondary,
+        indicatorColor:
+            isDark ? scheme.primary.withOpacity(0.16) : Colors.white,
         elevation: 8,
         height: 72,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        labelTextStyle: MaterialStateProperty.all(AppTextStyles.label),
+        labelTextStyle: MaterialStateProperty.resolveWith(
+          (states) => AppTextStyles.label.copyWith(
+            color:
+                isDark
+                    ? null
+                    : (states.contains(MaterialState.selected)
+                        ? Colors.white
+                        : Colors.white.withOpacity(0.8)),
+          ),
+        ),
         iconTheme: MaterialStateProperty.resolveWith(
           (states) => IconThemeData(
             color:
-                states.contains(MaterialState.selected)
-                    ? scheme.primary
-                    : scheme.onSurface.withOpacity(0.6),
+                isDark
+                    ? (states.contains(MaterialState.selected)
+                        ? scheme.primary
+                        : scheme.onSurface.withOpacity(0.6))
+                    : (states.contains(MaterialState.selected)
+                        ? Colors.black
+                        : Colors.white.withOpacity(0.75)),
           ),
         ),
       ),
