@@ -1,17 +1,29 @@
+import 'package:equb/models/equb_model.dart';
+import 'package:equb/providers/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/group.dart';
-import '../services/mock_group_service.dart';
 
-final mockGroupServiceProvider = Provider<MockGroupService>(
-  (ref) => MockGroupService(),
-);
-
+/// Legacy provider maintained for backward compatibility.
+/// New code should use [equbGroupsProvider] and [equbRepositoryProvider] from providers.dart.
+@Deprecated('Use equbGroupsProvider from providers.dart instead')
 class GroupListNotifier extends Notifier<List<Group>> {
   @override
   List<Group> build() {
-    final svc = ref.watch(mockGroupServiceProvider);
-    return List<Group>.from(svc.fetchGroups());
+    // Convert EqubGroups to legacy Group model for backward compatibility
+    final equbGroupsAsync = ref.watch(equbGroupsProvider);
+    return equbGroupsAsync.when(
+      data: (groups) => groups.map((g) => Group(
+        id: g.id,
+        name: g.name,
+        contribution: g.contributionAmount.toInt(),
+        frequency: g.scheduleConfig.cycle.label,
+        members: g.members,
+        nextPayout: g.rotationState.nextPayoutDate,
+      )).toList(),
+      loading: () => <Group>[],
+      error: (_, __) => <Group>[],
+    );
   }
 
   void createGroup({
@@ -20,35 +32,43 @@ class GroupListNotifier extends Notifier<List<Group>> {
     required String frequency,
     required List<String> members,
     DateTime? nextPayout,
-  }) {
-    final svc = ref.read(mockGroupServiceProvider);
-    final group = svc.createGroup(
-      name: name,
-      contribution: contribution,
-      frequency: frequency,
-      members: members,
-      nextPayout: nextPayout,
+  }) async {
+    final repo = ref.read(equbRepositoryProvider);
+    final cycle = EqubCycle.values.firstWhere(
+      (c) => c.label.toLowerCase() == frequency.toLowerCase(),
+      orElse: () => EqubCycle.weekly,
     );
-    state = [...state, group];
+    final newGroup = EqubGroup(
+      id: '',
+      name: name,
+      contributionAmount: contribution.toDouble(),
+      members: members,
+      frequencyDays: cycle.defaultDays ?? 30,
+      payoutStrategy: PayoutStrategy.fixedOrder,
+      scheduleConfig: EqubScheduleConfig(
+        cycle: cycle,
+      ),
+      rotationState: EqubRotationState(
+        nextPayoutDate: nextPayout ?? DateTime.now().add(const Duration(days: 7)),
+        payoutQueue: members,
+        contributionProgress: {
+          for (final member in members) member: 0.0,
+        },
+      ),
+    );
+    await repo.createGroup(newGroup);
+    ref.invalidate(equbGroupsProvider);
   }
 
-  void addMember(String groupId, String member) {
-    final svc = ref.read(mockGroupServiceProvider);
-    svc.addMember(groupId, member);
-    state = [
-      for (final group in state)
-        if (group.id == groupId)
-          Group(
-            id: group.id,
-            name: group.name,
-            contribution: group.contribution,
-            frequency: group.frequency,
-            members: [...group.members, member],
-            nextPayout: group.nextPayout,
-          )
-        else
-          group,
-    ];
+  void addMember(String groupId, String member) async {
+    final repo = ref.read(equbRepositoryProvider);
+    final existing = await repo.findGroup(groupId);
+    if (existing == null) return;
+    
+    final updatedMembers = [...existing.members, member];
+    final updated = existing.copyWith(members: updatedMembers);
+    await repo.updateGroup(updated);
+    ref.invalidate(equbGroupsProvider);
   }
 
   void updateGroup({
@@ -57,34 +77,38 @@ class GroupListNotifier extends Notifier<List<Group>> {
     int? contribution,
     String? frequency,
     DateTime? nextPayout,
-  }) {
-    final svc = ref.read(mockGroupServiceProvider);
-    final updated = svc.updateGroup(
-      groupId: groupId,
-      name: name,
-      contribution: contribution,
-      frequency: frequency,
-      nextPayout: nextPayout,
+  }) async {
+    final repo = ref.read(equbRepositoryProvider);
+    final existing = await repo.findGroup(groupId);
+    if (existing == null) return;
+    
+    final updated = existing.copyWith(
+      name: name ?? existing.name,
+      contributionAmount: contribution?.toDouble() ?? existing.contributionAmount,
+      scheduleConfig: frequency != null 
+        ? existing.scheduleConfig.copyWith(
+            cycle: EqubCycle.values.firstWhere(
+              (c) => c.label.toLowerCase() == frequency.toLowerCase(),
+              orElse: () => existing.scheduleConfig.cycle,
+            ),
+          )
+        : existing.scheduleConfig,
+      rotationState: nextPayout != null
+        ? existing.rotationState.copyWith(nextPayoutDate: nextPayout)
+        : existing.rotationState,
     );
-    if (updated == null) {
-      return;
-    }
-    state = [for (final group in state) group.id == groupId ? updated : group];
+    await repo.updateGroup(updated);
+    ref.invalidate(equbGroupsProvider);
   }
 
-  void deleteGroup(String groupId) {
-    final svc = ref.read(mockGroupServiceProvider);
-    final removed = svc.deleteGroup(groupId);
-    if (!removed) {
-      return;
-    }
-    state = [
-      for (final group in state)
-        if (group.id != groupId) group,
-    ];
+  void deleteGroup(String groupId) async {
+    final repo = ref.read(equbRepositoryProvider);
+    await repo.deleteGroup(groupId);
+    ref.invalidate(equbGroupsProvider);
   }
 }
 
+@Deprecated('Use equbGroupsProvider from providers.dart instead')
 final groupsProvider = NotifierProvider<GroupListNotifier, List<Group>>(
   GroupListNotifier.new,
 );

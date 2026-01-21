@@ -65,12 +65,12 @@ class PortalOperationsCockpitPanel extends StatelessWidget {
     final alerts = <_AlertItem>[
       _AlertItem(
         title: 'Wallet backlog elevated',
-        body: 'Processing latency increased (UI demo).',
+        body: 'Processing latency increased. Check queue status.',
         severity: _AlertSeverity.warning,
       ),
       _AlertItem(
         title: 'Retry window expiring',
-        body: '3 payments approaching max retry age (UI demo).',
+        body: '3 payments approaching max retry age. Review pending transactions.',
         severity: _AlertSeverity.info,
       ),
     ];

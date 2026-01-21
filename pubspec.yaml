@@ -80,6 +80,7 @@ dependencies:
   chapasdk: ^0.0.8+1
   web: ^1.1.1
   meta: ^1.14.0
+  table_calendar: ^3.0.9
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.

@@ -1,6 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:equb/models/transaction_model.dart';
-import 'package:equb/providers/providers.dart';
+import 'package:equb/models/transaction_model.dart';import 'package:equb/models/user_model.dart';import 'package:equb/providers/providers.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -105,4 +104,16 @@ final isSuperAdminProvider = StreamProvider<bool>((ref) {
       .ref('superadmins/$uid')
       .onValue
       .map((event) => event.snapshot.value == true);
+});
+
+/// Provider for all users (admin use only)
+final allUsersProvider = StreamProvider<List<UserModel>>((ref) {
+  final userRepo = ref.watch(userRepositoryProvider);
+  return userRepo.watchAllUsers();
+});
+
+/// Provider for paginated user fetching
+final paginatedUsersProvider = FutureProvider.family<List<UserModel>, int?>((ref, limit) async {
+  final userRepo = ref.watch(userRepositoryProvider);
+  return userRepo.getAllUsers(limit: limit);
 });

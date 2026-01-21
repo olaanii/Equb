@@ -9,8 +9,6 @@ import 'package:equb/ui/widgets/common.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../providers/group_providers.dart';
-
 class GroupChatScreen extends ConsumerStatefulWidget {
   const GroupChatScreen({super.key, required this.groupId});
 
@@ -32,22 +30,27 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final svc = ref.read(mockGroupServiceProvider);
-      final history = svc.fetchChatHistory(widget.groupId);
-      if (!context.mounted) return;
-      setState(() {
-        _messages
-          ..clear()
-          ..addAll(history)
-          ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-      });
-      _subscription = svc.chatStream(widget.groupId).listen((message) {
+      final chatService = ref.read(chatServiceProvider);
+      try {
+        final history = await chatService.getChatHistory(widget.groupId);
         if (!context.mounted) return;
         setState(() {
-          _mergeIncoming(message);
+          _messages
+            ..clear()
+            ..addAll(history)
+            ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
         });
-        _scrollToBottom();
-      });
+        _subscription = chatService.watchMessages(widget.groupId).listen((message) {
+          if (!context.mounted) return;
+          setState(() {
+            _mergeIncoming(message);
+          });
+          _scrollToBottom();
+        });
+      } catch (e) {
+        // Handle chat initialization error gracefully
+        debugPrint('Failed to initialize chat: $e');
+      }
     });
   }
 
@@ -115,12 +118,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'Mock realtime chat enabled',
+                                        'Real-time chat',
                                         style: theme.textTheme.titleSmall,
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'Messages stream from the in-memory service and support delivery state + retries.',
+                                        'Messages are synced in real-time with delivery confirmation and retry support.',
                                         style: theme.textTheme.bodySmall
                                             ?.copyWith(
                                               color: AppColors.textSecondary,
@@ -150,7 +153,8 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate((context, index) {
                         final message = _messages[index];
-                        final isMine = message.senderId == 'user-123';
+                        final currentUserId = ref.watch(currentUserProvider).value?.id ?? '';
+                        final isMine = message.senderId == currentUserId;
                         final isSystem = message.isSystem;
                         final bubbleColor =
                             isSystem
@@ -342,11 +346,15 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     if (trimmed.isEmpty || _isSending) {
       return;
     }
+    final currentUser = ref.read(currentUserProvider).value;
+    final userId = currentUser?.id ?? 'unknown';
+    final userName = currentUser?.name ?? 'You';
+    
     final localMessage = ChatMessage(
       id: 'local-${DateTime.now().microsecondsSinceEpoch}',
       groupId: widget.groupId,
-      senderId: 'user-123',
-      senderName: 'You',
+      senderId: userId,
+      senderName: userName,
       content: trimmed,
       timestamp: DateTime.now(),
       deliveryStatus: ChatDeliveryStatus.sending,
@@ -359,12 +367,12 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     _composerController.clear();
     _scrollToBottom();
 
-    final svc = ref.read(mockGroupServiceProvider);
+    final chatService = ref.read(chatServiceProvider);
     try {
-      final delivered = await svc.sendChatMessage(
+      final delivered = await chatService.sendMessage(
         groupId: widget.groupId,
-        senderId: localMessage.senderId,
-        senderName: localMessage.senderName,
+        senderId: userId,
+        senderName: userName,
         content: trimmed,
       );
       if (!context.mounted) return;

@@ -6,6 +6,8 @@ import 'package:equb/services/system_log_service.dart';
 abstract class UserRepository {
   Future<void> updateUser(UserModel user);
   Future<UserModel?> getUser(String userId);
+  Future<List<UserModel>> getAllUsers({int? limit, String? startAfterKey});
+  Stream<List<UserModel>> watchAllUsers();
 }
 
 class FirestoreUserRepository implements UserRepository {
@@ -69,5 +71,53 @@ class FirestoreUserRepository implements UserRepository {
         cause: e,
       );
     }
+  }
+
+  @override
+  Future<List<UserModel>> getAllUsers({int? limit, String? startAfterKey}) async {
+    try {
+      Query<Map<String, dynamic>> query = _firestore.collection('users')
+          .orderBy('createdAt', descending: true);
+
+      if (limit != null) {
+        query = query.limit(limit);
+      }
+
+      if (startAfterKey != null) {
+        final startDoc = await _firestore.collection('users').doc(startAfterKey).get();
+        if (startDoc.exists) {
+          query = query.startAfterDocument(startDoc);
+        }
+      }
+
+      final snapshot = await query.get();
+      return snapshot.docs.map((doc) {
+        return UserModel.fromJson({...doc.data(), 'id': doc.id});
+      }).toList();
+    } catch (e) {
+      _logService?.log(
+        LogLevel.error,
+        'FirestoreUserRepository.getAllUsers',
+        'Failed to fetch all users',
+        context: {'error': e.toString()},
+      );
+      throw RepositoryException(
+        code: 'get-all-failed',
+        message: 'Unable to fetch users',
+        cause: e,
+      );
+    }
+  }
+
+  @override
+  Stream<List<UserModel>> watchAllUsers() {
+    return _firestore.collection('users')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs.map((doc) {
+            return UserModel.fromJson({...doc.data(), 'id': doc.id});
+          }).toList();
+        });
   }
 }

@@ -1,5 +1,6 @@
 import 'package:equb/models/admin_audit.dart';
 import 'package:equb/models/user_model.dart';
+import 'package:equb/providers/admin_providers.dart';
 import 'package:equb/providers/providers.dart';
 import 'package:equb/ui/theme/theme_constants.dart';
 import 'package:equb/ui/widgets/common.dart';
@@ -157,26 +158,8 @@ class _BulkUserManagementScreenState
   }
 
   Widget _buildUserList() {
-    // In a real app, this would be a paginated list from the database
-    // For now, we'll show a placeholder with sample data
-    final usersAsync = ref.watch(
-      FutureProvider((ref) async {
-        // This would fetch users from the repository
-        // For demo purposes, returning sample data
-        return List.generate(20, (index) {
-          return UserModel(
-            id: 'user_$index',
-            email: 'user$index@example.com',
-            displayName: 'User $index',
-            role: UserRole.member,
-            phoneNumber: '+251911000${index.toString().padLeft(3, '0')}',
-            createdAt: DateTime.now().subtract(Duration(days: index)),
-            isVerified: index % 3 != 0,
-            profileImageUrl: null,
-          );
-        });
-      }),
-    );
+    // Fetch real users from Firebase via allUsersProvider
+    final usersAsync = ref.watch(allUsersProvider);
 
     return usersAsync.when(
       data:

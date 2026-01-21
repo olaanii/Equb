@@ -68,4 +68,95 @@ class RtdbUserRepository implements UserRepository {
       );
     }
   }
+
+  @override
+  Future<List<UserModel>> getAllUsers({int? limit, String? startAfterKey}) async {
+    try {
+      Query query = _usersRef.orderByChild('createdAt');
+
+      if (limit != null) {
+        query = query.limitToLast(limit);
+      }
+
+      if (startAfterKey != null) {
+        query = query.endBefore(null, key: startAfterKey);
+      }
+
+      final snapshot = await query.get();
+      final raw = snapshot.value;
+
+      if (raw == null || raw is! Map) {
+        return [];
+      }
+
+      final users = <UserModel>[];
+      for (final entry in raw.entries) {
+        final userId = entry.key.toString();
+        final value = entry.value;
+        if (value is! Map) continue;
+
+        try {
+          users.add(UserModel.fromJson({
+            ...Map<String, dynamic>.from(value),
+            'id': userId,
+          }));
+        } catch (e) {
+          _logService?.log(
+            LogLevel.warning,
+            'RtdbUserRepository.getAllUsers',
+            'Failed to parse user',
+            context: {'userId': userId, 'error': e.toString()},
+          );
+        }
+      }
+
+      // Sort by createdAt descending
+      users.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      return users;
+    } catch (e) {
+      _logService?.log(
+        LogLevel.error,
+        'RtdbUserRepository.getAllUsers',
+        'Failed to fetch all users',
+        context: {'error': e.toString()},
+      );
+      throw RepositoryException(
+        code: 'get-all-failed',
+        message: 'Unable to fetch users',
+        cause: e,
+      );
+    }
+  }
+
+  @override
+  Stream<List<UserModel>> watchAllUsers() {
+    return _usersRef.onValue.map((event) {
+      final raw = event.snapshot.value;
+      if (raw == null || raw is! Map) {
+        return <UserModel>[];
+      }
+
+      final users = <UserModel>[];
+      for (final entry in raw.entries) {
+        final userId = entry.key.toString();
+        final value = entry.value;
+        if (value is! Map) continue;
+
+        try {
+          users.add(UserModel.fromJson({
+            ...Map<String, dynamic>.from(value),
+            'id': userId,
+          }));
+        } catch (e) {
+          // Skip malformed user entries
+        }
+      }
+
+      // Sort by createdAt descending
+      users.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      return users;
+    });
+  }
 }
