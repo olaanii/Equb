@@ -1,34 +1,11 @@
-// Firebase options for each supported platform.
-//
-// CI note:
-// - Do NOT import local/ignored secrets files here.
-// - Values are read from compile-time `--dart-define` (works in CI).
-// - When values are missing, Firebase initialization will fail at runtime and
-//   the app shows a configuration error (see main.dart).
-//
-// Example:
-//   flutter run \
-//     --dart-define=FIREBASE_ANDROID_API_KEY=... \
-//     --dart-define=FIREBASE_ANDROID_APP_ID=... \
-//     --dart-define=FIREBASE_PROJECT_ID=...
-//
 // ignore_for_file: lines_longer_than_80_chars, avoid_classes_with_only_static_members
 import 'package:firebase_core/firebase_core.dart' show FirebaseOptions;
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+  show TargetPlatform, defaultTargetPlatform, kIsWeb;
+
+import 'config/firebase_secrets.dart';
 
 class DefaultFirebaseOptions {
-  // Shared
-  static const String _projectId = String.fromEnvironment(
-    'FIREBASE_PROJECT_ID',
-    defaultValue: 'REPLACE_ME',
-  );
-
-  static const String _storageBucket = String.fromEnvironment(
-    'FIREBASE_STORAGE_BUCKET',
-    defaultValue: 'REPLACE_ME',
-  );
-
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
       return web;
@@ -58,106 +35,43 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: String.fromEnvironment(
-      'FIREBASE_WEB_API_KEY',
-      defaultValue: 'REPLACE_ME',
-    ),
-    appId: String.fromEnvironment(
-      'FIREBASE_WEB_APP_ID',
-      defaultValue: 'REPLACE_ME',
-    ),
-    messagingSenderId: String.fromEnvironment(
-      'FIREBASE_MESSAGING_SENDER_ID',
-      defaultValue: 'REPLACE_ME',
-    ),
-    projectId: _projectId,
-    authDomain: String.fromEnvironment(
-      'FIREBASE_WEB_AUTH_DOMAIN',
-      defaultValue: 'REPLACE_ME',
-    ),
-    storageBucket: _storageBucket,
-    measurementId: String.fromEnvironment(
-      'FIREBASE_WEB_MEASUREMENT_ID',
-      defaultValue: 'REPLACE_ME',
-    ),
-    databaseURL: String.fromEnvironment(
-      'FIREBASE_DATABASE_URL',
-      defaultValue: 'REPLACE_ME',
-    ),
+    apiKey: FirebaseSecrets.webApiKey,
+    appId: FirebaseSecrets.webAppId,
+    messagingSenderId: FirebaseSecrets.webMessagingSenderId,
+    projectId: FirebaseSecrets.webProjectId,
+    authDomain: FirebaseSecrets.webAuthDomain,
+    storageBucket: FirebaseSecrets.webStorageBucket,
+    measurementId: FirebaseSecrets.webMeasurementId,
+    databaseURL: FirebaseSecrets.webDatabaseUrl,
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: String.fromEnvironment(
-      'FIREBASE_IOS_API_KEY',
-      defaultValue: 'REPLACE_ME',
-    ),
-    appId: String.fromEnvironment(
-      'FIREBASE_IOS_APP_ID',
-      defaultValue: 'REPLACE_ME',
-    ),
-    messagingSenderId: String.fromEnvironment(
-      'FIREBASE_MESSAGING_SENDER_ID',
-      defaultValue: 'REPLACE_ME',
-    ),
-    projectId: _projectId,
-    storageBucket: _storageBucket,
-    iosBundleId: String.fromEnvironment(
-      'FIREBASE_IOS_BUNDLE_ID',
-      defaultValue: 'REPLACE_ME',
-    ),
-    databaseURL: String.fromEnvironment(
-      'FIREBASE_DATABASE_URL',
-      defaultValue: 'REPLACE_ME',
-    ),
+    apiKey: FirebaseSecrets.iosApiKey,
+    appId: FirebaseSecrets.iosAppId,
+    messagingSenderId: FirebaseSecrets.iosMessagingSenderId,
+    projectId: FirebaseSecrets.iosProjectId,
+    storageBucket: FirebaseSecrets.iosStorageBucket,
+    iosBundleId: FirebaseSecrets.iosBundleId,
+    databaseURL: FirebaseSecrets.iosDatabaseUrl,
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: String.fromEnvironment(
-      'FIREBASE_ANDROID_API_KEY',
-      defaultValue: 'REPLACE_ME',
-    ),
-    appId: String.fromEnvironment(
-      'FIREBASE_ANDROID_APP_ID',
-      defaultValue: 'REPLACE_ME',
-    ),
-    messagingSenderId: String.fromEnvironment(
-      'FIREBASE_MESSAGING_SENDER_ID',
-      defaultValue: 'REPLACE_ME',
-    ),
-    projectId: _projectId,
-    storageBucket: _storageBucket,
-    databaseURL: String.fromEnvironment(
-      'FIREBASE_DATABASE_URL',
-      defaultValue: 'REPLACE_ME',
-    ),
+    apiKey: FirebaseSecrets.androidApiKey,
+    appId: FirebaseSecrets.androidAppId,
+    messagingSenderId: FirebaseSecrets.androidMessagingSenderId,
+    projectId: FirebaseSecrets.androidProjectId,
+    storageBucket: FirebaseSecrets.androidStorageBucket,
+    databaseURL: FirebaseSecrets.androidDatabaseUrl,
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: String.fromEnvironment(
-      'FIREBASE_WINDOWS_API_KEY',
-      defaultValue: 'REPLACE_ME',
-    ),
-    appId: String.fromEnvironment(
-      'FIREBASE_WINDOWS_APP_ID',
-      defaultValue: 'REPLACE_ME',
-    ),
-    messagingSenderId: String.fromEnvironment(
-      'FIREBASE_MESSAGING_SENDER_ID',
-      defaultValue: 'REPLACE_ME',
-    ),
-    projectId: _projectId,
-    authDomain: String.fromEnvironment(
-      'FIREBASE_WINDOWS_AUTH_DOMAIN',
-      defaultValue: 'REPLACE_ME',
-    ),
-    storageBucket: _storageBucket,
-    measurementId: String.fromEnvironment(
-      'FIREBASE_WINDOWS_MEASUREMENT_ID',
-      defaultValue: 'REPLACE_ME',
-    ),
-    databaseURL: String.fromEnvironment(
-      'FIREBASE_DATABASE_URL',
-      defaultValue: 'REPLACE_ME',
-    ),
+    apiKey: FirebaseSecrets.windowsApiKey,
+    appId: FirebaseSecrets.windowsAppId,
+    messagingSenderId: FirebaseSecrets.windowsMessagingSenderId,
+    projectId: FirebaseSecrets.windowsProjectId,
+    authDomain: FirebaseSecrets.windowsAuthDomain,
+    storageBucket: FirebaseSecrets.windowsStorageBucket,
+    measurementId: FirebaseSecrets.windowsMeasurementId,
+    databaseURL: FirebaseSecrets.windowsDatabaseUrl,
   );
 }

@@ -60,6 +60,9 @@ firebase.json
 # App-side Firebase options indirection (keep keys out of git)
 /lib/config/firebase_secrets.dart
 
+# Firebase Admin SDK service account JSON (server-side only)
+*firebase-adminsdk*.json
+
 # Android signing
 **/*.jks
 **/*.keystore
